@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext, createContext } from 'react';
-import { Upload, Users, Clock, UserX, Calendar, FileText, RefreshCw, X, UserCheck, Sparkles, LoaderCircle, BarChart2, Briefcase, UserMinus, TrendingUp, Award, AlertTriangle, Search, LayoutDashboard, ChevronsRight, Zap, Download, GitCompareArrows, ArrowUp, ArrowDown, Minus, Printer, ChevronsLeft, ChevronDown, Moon, Sun, BrainCircuit } from 'lucide-react';
+import { Upload, Users, Clock, UserX, Calendar, FileText, RefreshCw, X, UserCheck, Sparkles, LoaderCircle, BarChart2, Briefcase, UserMinus, TrendingUp, Award, AlertTriangle, Search, LayoutDashboard, ChevronsRight, Zap, Download, GitCompareArrows, ArrowUp, ArrowDown, Minus, Printer, ChevronsLeft, ChevronDown, Moon, Sun, BrainCircuit, DollarSign, Target, Info, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 //================================================================
@@ -75,15 +75,16 @@ const loadScript = (src) => {
         script.src = src;
         script.async = true;
         script.onload = resolve;
-        script.onerror = reject;
+        // FIX: Provide a more descriptive error message on failure
+        script.onerror = () => reject(new Error(`Gagal memuat skrip: ${src}`));
         document.head.appendChild(script);
     });
 };
 
 const monthMapping = {
     'januari': 1, 'jan': 1, 'februari': 2, 'feb': 2, 'maret': 3, 'mar': 3, 'april': 4, 'apr': 4, 'mei': 5,
-    'juni': 6, 'jun': 6, 'juli': 7, 'jul': 7, 'agustus': 8, 'agu': 8, 'ags': 8, 'september': 9, 'sep': 9,
-    'oktober': 10, 'okt': 10, 'november': 11, 'nov': 11, 'desember': 12, 'des': 12
+    'juni': 6, 'jun': 6, 'juli': 7, 'jul': 7, 'agustus': 8, 'agu': 8, 'ags': 8, 'aug': 8, 'september': 9, 'sep': 9,
+    'oktober': 10, 'okt': 10, 'november': 11, 'nov': 11, 'desember': 12, 'des': 12, 'dec': 12, 'december': 12
 };
 const getMonthNumber = (monthName) => {
     if (!monthName) return 0;
@@ -96,6 +97,10 @@ const formatDate = (dateString) => {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '';
     return date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 };
 
 //================================================================
@@ -147,7 +152,7 @@ const csvParserService = {
         });
     },
     processRow: (row) => {
-        const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'TAHUN_MASUK', 'LAMA_BEKERJA'];
+        const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'TAHUN_MASUK', 'LAMA_BEKERJA', 'GAJI_POKOK', 'TAHUN'];
         const processedRow = { ...row };
         numericColumns.forEach(col => {
             const cleanValue = String(processedRow[col] || '0').replace(/[^\d.-]/g, '');
@@ -206,13 +211,34 @@ const exportService = {
             link.click();
             document.body.removeChild(link);
         }
+    },
+    exportToPdf: (title, headers, data, filename = 'laporan.pdf') => {
+        // FIX: Add check for autoTable plugin
+        if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.jsPDF.autoTable) {
+            console.error("Layanan ekspor PDF belum siap, plugin autoTable mungkin gagal dimuat.");
+            return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text(title, 14, 22);
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Laporan dibuat pada: ${new Date().toLocaleDateString('id-ID')}`, 14, 30);
+
+        doc.autoTable({
+            head: [headers],
+            body: data,
+            startY: 35,
+            theme: 'grid',
+            headStyles: { fillColor: [22, 160, 133] },
+        });
+
+        doc.save(filename);
     }
 };
 
-// ================================================================
-// !! PERUBAHAN DI SINI !!
-// Payload sekarang mengirimkan semua field yang dibutuhkan backend
-// ================================================================
 const mlModelService = {
     predictLeave: async (employee) => {
         const FASTAPI_URL = 'http://127.0.0.1:8000/predict';
@@ -225,9 +251,9 @@ const mlModelService = {
             sisa_cuti: employee.SISA_CUTI || 0,
             hari_kerja: employee.HARI_KERJA || 0,
             bulan: new Date().getMonth() + 1,
-            tahun: new Date().getFullYear(), // Menambahkan tahun
-            tahun_masuk: employee.TAHUN_MASUK || 0, // Menambahkan tahun_masuk
-            lama_bekerja: employee.LAMA_BEKERJA || 0, // Menambahkan lama_bekerja
+            tahun: new Date().getFullYear(),
+            tahun_masuk: employee.TAHUN_MASUK || 0,
+            lama_bekerja: employee.LAMA_BEKERJA || 0,
             divisi: employee.DIVISI || 'N/A',
             jabatan: employee.JABATAN || 'N/A'
         };
@@ -276,7 +302,6 @@ const useAttendanceData = (allData) => {
             acc.IJIN_FULL += row.IJIN_FULL;
             acc.CUTI += row.CUTI;
             if(row.SISA_CUTI) acc.SISA_CUTI = row.SISA_CUTI;
-            // Pastikan TAHUN_MASUK dan LAMA_BEKERJA diambil
             if(row.TAHUN_MASUK) acc.TAHUN_MASUK = row.TAHUN_MASUK;
             if(row.LAMA_BEKERJA) acc.LAMA_BEKERJA = row.LAMA_BEKERJA;
             return acc;
@@ -286,9 +311,14 @@ const useAttendanceData = (allData) => {
             JABATAN: records[0].JABATAN || 'N/A',
             TAHUN_MASUK: records[0].TAHUN_MASUK || 0,
             LAMA_BEKERJA: records[0].LAMA_BEKERJA || 0,
+            GAJI_POKOK: records[0].GAJI_POKOK || 0,
             HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0, SISA_CUTI: records[0].SISA_CUTI || 0
         });
         return employeeData;
+    }, [allData]);
+
+    const availableYears = useMemo(() => {
+        return [...new Set(allData.map(item => item.TAHUN))].filter(Boolean).sort((a, b) => b - a);
     }, [allData]);
 
     const availableMonths = useMemo(() => {
@@ -303,7 +333,7 @@ const useAttendanceData = (allData) => {
         return [...new Set(allData.map(item => item.DIVISI))].filter(Boolean).sort();
     }, [allData]);
 
-    return { getEmployeeByName, availableMonths, availableEmployees, availableDivisions, allData };
+    return { getEmployeeByName, availableYears, availableMonths, availableEmployees, availableDivisions, allData };
 };
 
 //================================================================
@@ -434,12 +464,12 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
     const handleFileInputChange = useCallback((e) => { if (e.target.files && e.target.files.length > 0) { onFileSelect(e.target.files[0]); e.target.value = null; } }, [onFileSelect]);
 
     return (
-        <div className="container mx-auto px-4 py-16 flex flex-col items-center justify-center min-h-screen text-slate-800 dark:text-slate-200 transition-colors duration-300">
+        <div className="container mx-auto px-4 py-16 flex flex-col items-center justify-center min-h-screen text-slate-800 dark:text-slate-200 transition-colors duration-300 overflow-y-auto">
             <div className="text-center mb-12">
                 <FileText className="w-16 h-16 mx-auto text-sky-600 dark:text-sky-400 mb-4" />
-                <h1 className="text-5xl md:text-6xl font-bold text-sky-900 dark:text-white mb-6">Dasbor Analisis</h1>
-                <h2 className="text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
-                <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">Unggah file CSV Anda untuk mendapatkan wawasan mendalam dan analisis AI tentang pola kehadiran tim Anda.</p>
+                <h1 className="text-4xl md:text-5xl font-bold text-sky-900 dark:text-white mb-6">Dashboard Analisis</h1>
+                <h2 className="text-2xl md:text-3xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
+                <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">Unggah file CSV Anda untuk mendapatkan wawasan mendalam dan analisis AI tentang pola kehadiran tim Anda.</p>
             </div>
             <div className="max-w-2xl w-full mx-auto">
                 {!scriptsLoaded ? (
@@ -451,18 +481,18 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
                     </div>
                 ) : (
                     <div
-                        className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 cursor-pointer group ${dragOver ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-sky-600 dark:hover:border-sky-400 hover:bg-white dark:hover:bg-slate-800'}`}
+                        className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer group ${dragOver ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-sky-600 dark:hover:border-sky-400 hover:bg-white dark:hover:bg-slate-800'}`}
                         onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
                         onClick={() => document.getElementById('file-input')?.click()}
                     >
                         <input type="file" id="file-input" className="hidden" accept=".csv" onChange={handleFileInputChange} disabled={!scriptsLoaded} />
                         <div className="flex flex-col items-center">
-                            <div className={`p-4 rounded-full mb-6 transition-all duration-300 ${dragOver ? 'bg-sky-100 dark:bg-sky-900 scale-110' : 'bg-gray-100 dark:bg-slate-700 group-hover:bg-sky-100 dark:group-hover:bg-sky-900'}`}>
-                                <Upload className={`w-12 h-12 transition-colors duration-300 ${dragOver ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-sky-600 dark:group-hover:text-sky-400'}`} />
+                            <div className={`p-3 rounded-full mb-4 transition-all duration-300 ${dragOver ? 'bg-sky-100 dark:bg-sky-900 scale-110' : 'bg-gray-100 dark:bg-slate-700 group-hover:bg-sky-100 dark:group-hover:bg-sky-900'}`}>
+                                <Upload className={`w-10 h-10 transition-colors duration-300 ${dragOver ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-sky-600 dark:group-hover:text-sky-400'}`} />
                             </div>
-                            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{dragOver ? 'Lepaskan file di sini' : 'Seret & lepas file CSV'}</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-6">atau</p>
-                            <button className="bg-sky-700 hover:bg-sky-800 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg">Pilih File</button>
+                            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{dragOver ? 'Lepaskan file di sini' : 'Seret & lepas file CSV'}</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mb-4">atau</p>
+                            <button className="bg-sky-700 hover:bg-sky-800 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg">Pilih File</button>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">Mendukung file CSV maks. 10MB</p>
                         </div>
                     </div>
@@ -476,6 +506,38 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
                     </div>
                 )}
             </div>
+            
+            <motion.div 
+                className="mt-20 max-w-4xl w-full text-center"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+            >
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-8">Fitur Unggulan Kami</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                        <div className="p-3 bg-orange-100 dark:bg-orange-900/50 rounded-full mb-4">
+                            <Sparkles className="w-8 h-8 text-orange-500 dark:text-orange-400" />
+                        </div>
+                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Analisis AI Mendalam</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Dapatkan wawasan dan rekomendasi yang dapat ditindaklanjuti secara otomatis dari data Anda.</p>
+                    </div>
+                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                        <div className="p-3 bg-sky-100 dark:bg-sky-900/50 rounded-full mb-4">
+                            <BarChart2 className="w-8 h-8 text-sky-500 dark:text-sky-400" />
+                        </div>
+                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Visualisasi Interaktif</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Jelajahi data kehadiran melalui grafik dan bagan yang dinamis dan mudah dipahami.</p>
+                    </div>
+                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                        <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-full mb-4">
+                            <BrainCircuit className="w-8 h-8 text-green-500 dark:text-green-400" />
+                        </div>
+                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Prediksi Cuti</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Antisipasi kebutuhan cuti karyawan dengan model prediktif berbasis machine learning.</p>
+                    </div>
+                </div>
+            </motion.div>
         </div>
     );
 };
@@ -611,12 +673,10 @@ const AiAnalysisModal = ({ show, title, content, isLoading, onClose }) => {
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-6 flex-1 overflow-hidden">
-                   <CustomScrollbar>
-                        {isLoading ? <AiAnalysisSkeleton /> : (
-                            <div className="prose prose-sm md:prose-base max-w-none text-gray-700 dark:text-gray-300 dark:prose-invert" dangerouslySetInnerHTML={{ __html: content.replace(/### \*\*(.*?)\*\*/g, `<h3 class="text-lg font-semibold text-sky-800 dark:text-sky-400 mt-4 mb-2">$1</h3>`).replace(/\*\*(.*?)\*\*/g, `<strong class="text-gray-900 dark:text-white">$1</strong>`).replace(/\n/g, `<br />`) }}></div>
-                        )}
-                    </CustomScrollbar>
+                <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                    {isLoading ? <AiAnalysisSkeleton /> : (
+                        <div className="prose prose-sm md:prose-base max-w-none text-gray-700 dark:text-gray-300 dark:prose-invert" dangerouslySetInnerHTML={{ __html: content.replace(/### \*\*(.*?)\*\*/g, `<h3 class="text-lg font-semibold text-sky-800 dark:text-sky-400 mt-4 mb-2">$1</h3>`).replace(/\*\*(.*?)\*\*/g, `<strong class="text-gray-900 dark:text-white">$1</strong>`).replace(/\n/g, `<br />`) }}></div>
+                    )}
                 </div>
                 <div className="flex justify-end p-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 rounded-b-2xl">
                     <button onClick={onClose} className="bg-sky-700 hover:bg-sky-800 text-white font-medium py-2 px-6 rounded-lg">Tutup</button>
@@ -690,23 +750,217 @@ const AnimatedDropdown = ({ options, selectedValue, onValueChange, placeholder, 
     );
 };
 
+const SearchableDropdown = ({ options, selectedValue, onValueChange, placeholder }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleSelect = (value) => {
+        onValueChange(value);
+        setIsOpen(false);
+        setSearchTerm("");
+    };
+
+    const filteredOptions = useMemo(() =>
+        options.filter(option =>
+            option.toLowerCase().includes(searchTerm.toLowerCase())
+        ), [options, searchTerm]);
+
+    const displayValue = selectedValue || placeholder;
+
+    return (
+        <div className="relative w-full" ref={dropdownRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-800 dark:text-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-sky-500 flex justify-between items-center transition-colors duration-300"
+            >
+                <span className="truncate">{displayValue}</span>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }}>
+                    <ChevronDown className="w-5 h-5" />
+                </motion.div>
+            </button>
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg"
+                    >
+                        <div className="p-2">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Cari nama..."
+                                    className="w-full bg-slate-100 dark:bg-slate-600 border-none rounded-md pl-9 pr-3 py-1.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </div>
+                        </div>
+                        <ul className="max-h-52 overflow-y-auto custom-scrollbar">
+                            {filteredOptions.length > 0 ? filteredOptions.map(option => (
+                                <li
+                                    key={option}
+                                    onClick={() => handleSelect(option)}
+                                    className="px-4 py-2 text-gray-800 dark:text-gray-200 hover:bg-sky-100 dark:hover:bg-sky-800 cursor-pointer"
+                                >
+                                    {option}
+                                </li>
+                            )) : (
+                                <li className="px-4 py-2 text-gray-500 text-sm">Tidak ada hasil</li>
+                            )}
+                        </ul>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths }) => {
+    const salaryDetails = useMemo(() => {
+        if (!employeeData) {
+            return {
+                basicSalary: 0, mealAllowance: 0, transportAllowance: 0, incentive: 0,
+                totalAllowances: 0, grossSalary: 0, lateDeduction: 0, sickDeduction: 0,
+                permitDeduction: 0, totalDeductions: 0, finalSalary: 0
+            };
+        }
+        const mealAllowance = (employeeData.HARI_KERJA || 0) * 20000;
+        const transportAllowance = (employeeData.HARI_KERJA || 0) * 10000;
+        const incentive = 100000 * numberOfMonths;
+        const totalAllowances = mealAllowance + transportAllowance + incentive;
+
+        const lateDeduction = (employeeData.TERLAMBAT || 0) * 5000;
+        const sickDeduction = (employeeData.SURAT_DOKTER || 0) * 10000;
+        const permitDeduction = (employeeData.IJIN_FULL || 0) * 10000;
+        const totalDeductions = lateDeduction + sickDeduction + permitDeduction;
+
+        const basicSalary = employeeData.GAJI_POKOK || 0;
+        const grossSalary = basicSalary + totalAllowances;
+        const finalSalary = grossSalary - totalDeductions;
+
+        return {
+            basicSalary, mealAllowance, transportAllowance, incentive, totalAllowances,
+            grossSalary, lateDeduction, sickDeduction, permitDeduction, totalDeductions, finalSalary,
+            numberOfMonths
+        };
+    }, [employeeData, numberOfMonths]);
+
+    if (!employeeData || employeeData.HARI_KERJA === 0) return null;
+
+    return (
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
+            <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center gap-2">
+                <DollarSign className="w-6 h-6 text-green-500" />
+                Kalkulator Gaji & Denda
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                {/* Pendapatan */}
+                <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b pb-2 border-gray-200 dark:border-slate-700">Pendapatan</h4>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Gaji Pokok</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.basicSalary)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Tunjangan Makan</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.mealAllowance)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Tunjangan Transport</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.transportAllowance)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Insentif ({salaryDetails.numberOfMonths} bulan)</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.incentive)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg mt-2">
+                        <span className="font-bold text-green-800 dark:text-green-300">Total Gaji Kotor</span>
+                        <span className="font-bold text-green-800 dark:text-green-300">{formatCurrency(salaryDetails.grossSalary)}</span>
+                    </div>
+                </div>
+
+                {/* Potongan */}
+                <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b pb-2 border-gray-200 dark:border-slate-700">Potongan</h4>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Potongan Terlambat</span>
+                        <span className="text-sm font-medium text-orange-600 dark:text-orange-400">(-) {formatCurrency(salaryDetails.lateDeduction)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Potongan Sakit</span>
+                        <span className="text-sm font-medium text-red-600 dark:text-red-400">(-) {formatCurrency(salaryDetails.sickDeduction)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Potongan Izin</span>
+                        <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">(-) {formatCurrency(salaryDetails.permitDeduction)}</span>
+                    </div>
+                     <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/30 rounded-lg mt-2">
+                        <span className="font-bold text-red-800 dark:text-red-300">Total Potongan</span>
+                        <span className="font-bold text-red-800 dark:text-red-300">(-) {formatCurrency(salaryDetails.totalDeductions)}</span>
+                    </div>
+                </div>
+            </div>
+            {/* Gaji Akhir */}
+            <div className="flex justify-between items-center p-4 bg-sky-100 dark:bg-sky-900/50 rounded-lg mt-6">
+                <span className="font-bold text-lg text-sky-800 dark:text-sky-300">Estimasi Gaji Akhir (Take-Home Pay)</span>
+                <span className="font-bold text-xl text-sky-800 dark:text-sky-300">{formatCurrency(salaryDetails.finalSalary)}</span>
+            </div>
+        </div>
+    );
+};
+
 const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) => {
     const { theme } = useTheme();
+    const [selectedYear, setSelectedYear] = useState('semua');
     const [selectedMonth, setSelectedMonth] = useState('semua');
 
     const employeeAllRecords = useMemo(() => {
         return allData.filter(row => row.NAMA === employeeName);
     }, [allData, employeeName]);
 
-    const availableMonths = useMemo(() => {
-        const months = new Set(employeeAllRecords.map(item => item.BULAN));
-        return [...months].filter(Boolean).sort((a, b) => getMonthNumber(a) - getMonthNumber(b));
+    const availableYears = useMemo(() => {
+        return [...new Set(employeeAllRecords.map(item => item.TAHUN))].filter(Boolean).sort((a, b) => b - a);
     }, [employeeAllRecords]);
+    
+    const availableMonths = useMemo(() => {
+        let records = employeeAllRecords;
+        if (selectedYear !== 'semua') {
+            records = records.filter(item => item.TAHUN === selectedYear);
+        }
+        const months = new Set(records.map(item => item.BULAN));
+        return [...months].filter(Boolean).sort((a, b) => getMonthNumber(a) - getMonthNumber(b));
+    }, [employeeAllRecords, selectedYear]);
+
+    useEffect(() => {
+        if (selectedMonth !== 'semua' && !availableMonths.includes(selectedMonth)) {
+            setSelectedMonth('semua');
+        }
+    }, [selectedYear, selectedMonth, availableMonths]);
 
     const displayData = useMemo(() => {
-        const recordsToProcess = selectedMonth === 'semua' 
-            ? employeeAllRecords 
-            : employeeAllRecords.filter(row => row.BULAN === selectedMonth);
+        let recordsToProcess = employeeAllRecords;
+
+        if (selectedYear !== 'semua') {
+            recordsToProcess = recordsToProcess.filter(row => row.TAHUN === selectedYear);
+        }
+        if (selectedMonth !== 'semua') {
+            recordsToProcess = recordsToProcess.filter(row => row.BULAN === selectedMonth);
+        }
 
         if (recordsToProcess.length === 0) {
             const baseData = employeeAllRecords[0] || {};
@@ -716,33 +970,49 @@ const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) =
                 JABATAN: baseData.JABATAN || 'N/A',
                 TAHUN_MASUK: baseData.TAHUN_MASUK || 0,
                 LAMA_BEKERJA: baseData.LAMA_BEKERJA || 0,
+                GAJI_POKOK: baseData.GAJI_POKOK || 0,
                 HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0,
             };
         }
 
-        return recordsToProcess.reduce((acc, row, index) => {
-            if (index === 0) {
-                acc.NAMA = row.NAMA;
-                acc.DIVISI = row.DIVISI || 'N/A';
-                acc.JABATAN = row.JABATAN || 'N/A';
-                acc.TAHUN_MASUK = row.TAHUN_MASUK || 0;
-                acc.LAMA_BEKERJA = row.LAMA_BEKERJA || 0;
-            }
+        const latestRecord = recordsToProcess.sort((a,b) => getMonthNumber(b.BULAN) - getMonthNumber(a.BULAN))[0] || {};
+
+        return recordsToProcess.reduce((acc, row) => {
             acc.HARI_KERJA += row.HARI_KERJA;
             acc.TERLAMBAT += row.TERLAMBAT;
             acc.SURAT_DOKTER += row.SURAT_DOKTER;
             acc.IJIN_FULL += row.IJIN_FULL;
             acc.CUTI += row.CUTI;
             return acc;
-        }, { HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0 });
-    }, [employeeName, employeeAllRecords, selectedMonth]);
+        }, { 
+            NAMA: employeeName,
+            DIVISI: latestRecord.DIVISI || 'N/A',
+            JABATAN: latestRecord.JABATAN || 'N/A',
+            TAHUN_MASUK: latestRecord.TAHUN_MASUK || 0,
+            LAMA_BEKERJA: latestRecord.LAMA_BEKERJA || 0,
+            GAJI_POKOK: latestRecord.GAJI_POKOK || 0,
+            HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0 
+        });
+    }, [employeeName, employeeAllRecords, selectedYear, selectedMonth]);
+
+    const numberOfMonthsForIncentive = useMemo(() => {
+        if (selectedMonth !== 'semua') {
+            return 1;
+        }
+        let recordsToProcess = employeeAllRecords;
+        if (selectedYear !== 'semua') {
+            recordsToProcess = recordsToProcess.filter(row => row.TAHUN === selectedYear);
+        }
+        const uniqueMonths = new Set(recordsToProcess.map(item => item.BULAN));
+        return uniqueMonths.size > 0 ? uniqueMonths.size : 1;
+    }, [selectedYear, selectedMonth, employeeAllRecords]);
 
     const performanceMetrics = useMemo(() => {
-        const score = Math.max(0, Math.round(100 - (displayData.TERLAMBAT * 5) - ((displayData.SURAT_DOKTER + displayData.IJIN_FULL) * 3)));
+        const score = Math.max(0, Math.round(100 - (displayData.TERLAMBAT * 2) - ((displayData.SURAT_DOKTER + displayData.IJIN_FULL) * 1.5)));
         const totalDays = displayData.HARI_KERJA + displayData.SURAT_DOKTER + displayData.IJIN_FULL;
         const attendanceRate = totalDays > 0 ? (displayData.HARI_KERJA / totalDays) * 100 : 0;
-        const disciplineScore = Math.max(0, 100 - (displayData.TERLAMBAT * 5));
-        const consistencyRate = attendanceRate; // Simplified for now
+        const disciplineScore = Math.max(0, 100 - (displayData.TERLAMBAT * 2));
+        const consistencyRate = attendanceRate;
         return { score, attendanceRate, disciplineScore, consistencyRate };
     }, [displayData]);
     
@@ -756,8 +1026,8 @@ const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) =
         if (displayData.HARI_KERJA > 0) {
             return `Selama periode yang dipilih, ${displayData.NAMA} telah bekerja selama <strong class="text-sky-800 dark:text-sky-400">${displayData.HARI_KERJA}</strong> hari. Karyawan ini tercatat terlambat sebanyak <strong class="text-orange-600 dark:text-orange-400">${displayData.TERLAMBAT}</strong> kali dan mengambil total <strong class="text-red-600 dark:text-red-400">${displayData.SURAT_DOKTER + displayData.IJIN_FULL}</strong> hari absen di luar cuti resmi.`;
         }
-        return `Tidak ada data kehadiran untuk ${displayData.NAMA} pada periode ${selectedMonth}.`;
-    }, [displayData, selectedMonth]);
+        return `Tidak ada data kehadiran untuk ${displayData.NAMA} pada periode yang dipilih.`;
+    }, [displayData, selectedMonth, selectedYear]);
 
     const performanceChartData = useMemo(() => {
         const score = performanceMetrics.score;
@@ -786,6 +1056,22 @@ const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) =
         }
     };
 
+    const handleExportPdf = () => {
+        const headers = ["Metrik", "Nilai"];
+        const data = [
+            ["Nama", displayData.NAMA],
+            ["Jabatan", displayData.JABATAN],
+            ["Divisi", displayData.DIVISI],
+            ["Periode", `${selectedMonth}, ${selectedYear}`],
+            ["Total Hari Kerja", `${displayData.HARI_KERJA} hari`],
+            ["Total Terlambat", `${displayData.TERLAMBAT} kali`],
+            ["Total Absen Sakit", `${displayData.SURAT_DOKTER} hari`],
+            ["Total Absen Izin", `${displayData.IJIN_FULL} hari`],
+            ["Skor Kinerja", `${performanceMetrics.score}`],
+        ];
+        exportService.exportToPdf(`Laporan Kinerja - ${employeeName}`, headers, data, `laporan_${employeeName}.pdf`);
+    };
+
     if (!displayData) {
         return <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">Memuat data karyawan...</div>;
     }
@@ -804,8 +1090,16 @@ const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) =
                         <h2 className="text-3xl font-bold text-sky-900 dark:text-white">{displayData.NAMA}</h2>
                         <p className="text-lg text-gray-600 dark:text-gray-400">{displayData.JABATAN} • {displayData.DIVISI} • {tenureString}</p>
                     </div>
-                   <div className="w-full md:w-56 no-print">
-                        <AnimatedDropdown options={availableMonths} selectedValue={selectedMonth} onValueChange={setSelectedMonth} placeholder="Semua Bulan" includeAllOption={true} />
+                   <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4 no-print">
+                        <div className="w-full sm:w-40">
+                            <AnimatedDropdown options={availableYears} selectedValue={selectedYear} onValueChange={setSelectedYear} placeholder="Semua Tahun" includeAllOption={true} />
+                        </div>
+                        <div className="w-full sm:w-40">
+                            <AnimatedDropdown options={availableMonths} selectedValue={selectedMonth} onValueChange={setSelectedMonth} placeholder="Semua Bulan" includeAllOption={true} />
+                        </div>
+                        <button onClick={handleExportPdf} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-xl flex items-center justify-center gap-2">
+                            <Download size={16} /> Ekspor PDF
+                        </button>
                     </div>
                 </div>
             </div>
@@ -849,17 +1143,82 @@ const EmployeeDetailView = ({ employeeName, allData, onAnalyze, isAiLoading }) =
             </div>
 
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Ringkasan Kehadiran ({selectedMonth === 'semua' ? 'Total' : selectedMonth})</h3>
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Ringkasan Kehadiran ({selectedYear === 'semua' ? 'Semua Tahun' : selectedYear}, {selectedMonth === 'semua' ? 'Semua Bulan' : selectedMonth})</h3>
                 <div className="text-gray-700 dark:text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: summaryHTML }} />
             </div>
+            
+            <EmployeeSalaryCalculator employeeData={displayData} numberOfMonths={numberOfMonthsForIncentive} />
         </motion.div>
     );
 };
 
 const AnalyticsPage = ({ data }) => {
     const [selectedMetric, setSelectedMetric] = useState('performance');
-    const analyticsData = useMemo(() => { const divisions = {}; data.forEach(employee => { const div = employee.DIVISI || 'N/A'; if (!divisions[div]) { divisions[div] = { name: div, employees: [], totalTardiness: 0, totalLeave: 0 }; } divisions[div].employees.push(employee); divisions[div].totalTardiness += employee.TERLAMBAT; divisions[div].totalLeave += employee.CUTI; }); Object.values(divisions).forEach(div => { const employeeCount = div.employees.length; if (employeeCount > 0) { const avgTardiness = div.totalTardiness / employeeCount; const avgLeave = div.totalLeave / employeeCount; div.avgPerformance = Math.max(0, 100 - (avgTardiness * 5) - (avgLeave * 2)); } else { div.avgPerformance = 0; } }); return divisions; }, [data]);
-    const topPerformers = useMemo(() => { return [...data].filter(emp => emp.HARI_KERJA > 0).map(emp => ({ ...emp, score: Math.max(0, 100 - (emp.TERLAMBAT * 5) - ((emp.SURAT_DOKTER + emp.IJIN_FULL) * 3)) })).sort((a, b) => b.score - a.score).slice(0, 5); }, [data]);
+    const { availableEmployees } = useAttendanceData(data);
+
+    const aggregatedData = useMemo(() => {
+        const employeeMap = new Map();
+        data.forEach(row => {
+            const name = row.NAMA;
+            if (!name) return;
+
+            if (!employeeMap.has(name)) {
+                employeeMap.set(name, {
+                    NAMA: name,
+                    DIVISI: row.DIVISI || 'N/A',
+                    JABATAN: row.JABATAN || 'N/A',
+                    HARI_KERJA: 0,
+                    TERLAMBAT: 0,
+                    SURAT_DOKTER: 0,
+                    IJIN_FULL: 0,
+                    CUTI: 0,
+                });
+            }
+            const stats = employeeMap.get(name);
+            stats.HARI_KERJA += row.HARI_KERJA || 0;
+            stats.TERLAMBAT += row.TERLAMBAT || 0;
+            stats.SURAT_DOKTER += row.SURAT_DOKTER || 0;
+            stats.IJIN_FULL += row.IJIN_FULL || 0;
+            stats.CUTI += row.CUTI || 0;
+        });
+        return Array.from(employeeMap.values());
+    }, [data]);
+
+    const analyticsData = useMemo(() => {
+        const divisions = {};
+        aggregatedData.forEach(employee => {
+            const div = employee.DIVISI || 'N/A';
+            if (!divisions[div]) {
+                divisions[div] = { name: div, employees: [], totalTardiness: 0, totalLeave: 0, totalWorkDays: 0, totalAbsence: 0 };
+            }
+            divisions[div].employees.push(employee);
+            divisions[div].totalTardiness += employee.TERLAMBAT;
+            divisions[div].totalLeave += employee.CUTI;
+            divisions[div].totalWorkDays += employee.HARI_KERJA;
+            divisions[div].totalAbsence += employee.SURAT_DOKTER + employee.IJIN_FULL;
+        });
+
+        Object.values(divisions).forEach(div => {
+            const { totalWorkDays, totalTardiness, totalAbsence } = div;
+            if (totalWorkDays > 0) {
+                const tardinessRate = (totalTardiness / totalWorkDays) * 100;
+                const absenceRate = (totalAbsence / (totalWorkDays + totalAbsence)) * 100;
+                const score = 100 - (tardinessRate * 2) - (absenceRate * 4);
+                div.avgPerformance = Math.max(0, score);
+            } else {
+                div.avgPerformance = 0;
+            }
+        });
+        return divisions;
+    }, [aggregatedData]);
+
+    const topPerformers = useMemo(() => {
+        return [...aggregatedData]
+            .filter(emp => emp.HARI_KERJA > 0)
+            .map(emp => ({ ...emp, score: Math.max(0, 100 - (emp.TERLAMBAT * 2) - ((emp.SURAT_DOKTER + emp.IJIN_FULL) * 1.5)) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
+    }, [aggregatedData]);
 
     const monthlyTrendData = useMemo(() => {
         const monthlyStats = {};
@@ -905,32 +1264,42 @@ const AnalyticsPage = ({ data }) => {
         transition={{ duration: 0.3 }}
     >
         <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 text-white flex justify-between items-center"><div className="flex-grow"><div className="flex items-center gap-3 mb-4"><TrendingUp className="w-8 h-8" /><h2 className="text-3xl font-bold">Analisis & Wawasan</h2></div><p className="text-sky-100 text-lg">Analisis mendalam performa kehadiran dan produktivitas tim</p></div><button onClick={handleExport} className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors no-print"><Download size={16} /> Ekspor</button></div>
-
-        {/* Monthly Trend Chart */}
+        
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
             <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Tren Kehadiran per Bulan</h3>
-            <ChartWrapper chartId="monthly-trend-chart" type="line" data={monthlyTrendData} options={monthlyChartOptions} fallbackText={{ icon: <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Data tidak cukup untuk menampilkan tren bulanan." }} />
+            <div className="h-80">
+                <ChartWrapper chartId="monthly-trend-chart" type="line" data={monthlyTrendData} options={monthlyChartOptions} fallbackText={{ icon: <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Data tidak cukup untuk menampilkan tren bulanan." }} />
+            </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300"><div className="flex flex-wrap gap-4 mb-6 no-print"><button onClick={() => setSelectedMetric('performance')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'performance' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><Award className="w-4 h-4" /> Performa Divisi</button><button onClick={() => setSelectedMetric('trends')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'trends' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><TrendingUp className="w-4 h-4" /> Tren & Pola</button><button onClick={() => setSelectedMetric('risks')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'risks' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><AlertTriangle className="w-4 h-4" /> Identifikasi Risiko</button></div>{selectedMetric === 'performance' && (<div className="grid grid-cols-1 lg:grid-cols-2 gap-8"><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Skor Kinerja per Divisi</h3><div className="space-y-4">{Object.values(analyticsData).map(div => (<div key={div.name} className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg"><div className="flex justify-between items-center mb-2"><span className="font-medium text-gray-800 dark:text-gray-200">{div.name}</span><span className="text-lg font-bold text-sky-700 dark:text-sky-400">{div.avgPerformance.toFixed(1)}</span></div><div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2"><div className="bg-gradient-to-r from-sky-500 to-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${div.avgPerformance}%` }}></div></div><div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{div.employees.length} karyawan • Rata-rata Terlambat: {div.employees.length > 0 ? (div.totalTardiness / div.employees.length).toFixed(1) : 0}</div></div>))}</div></div><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">5 Karyawan Terbaik</h3><div className="space-y-3">{topPerformers.map((emp, index) => (<div key={emp.NAMA} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-600' : 'bg-sky-600'}`}>{index + 1}</div><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI}</p></div></div><div className="text-right"><p className="text-lg font-bold text-sky-700 dark:text-sky-400">{emp.score.toFixed(1)}</p><p className="text-xs text-gray-500 dark:text-gray-400">Skor Kinerja</p></div></div>))}</div></div></div>)}{selectedMetric === 'trends' && (<div className="space-y-6"><div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Analisis Tren Kehadiran</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="text-center"><div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{data.length > 0 ? ((data.reduce((sum, emp) => sum + emp.TERLAMBAT, 0) / data.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Terlambat/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-red-600 dark:text-red-400">{data.length > 0 ? ((data.reduce((sum, emp) => sum + emp.SURAT_DOKTER + emp.IJIN_FULL, 0) / data.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Absen/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{data.length > 0 ? ((data.reduce((sum, emp) => sum + emp.CUTI, 0) / data.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Cuti/Karyawan</div></div></div></div></div>)}{selectedMetric === 'risks' && (<div className="space-y-6"><div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-red-800 dark:text-red-300 flex items-center"><AlertTriangle className="w-5 h-5 mr-2" /> Karyawan Berisiko Tinggi</h3><div className="space-y-3">{data.filter(emp => emp.TERLAMBAT > 5 || (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3).slice(0, 5).map(emp => (<div key={emp.NAMA} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-red-200 dark:border-red-800/50"><div className="flex justify-between items-center"><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI} - {emp.JABATAN}</p></div><div className="text-right"><p className="text-sm text-red-600 dark:text-red-400">{emp.TERLAMBAT > 5 && `Terlambat: ${emp.TERLAMBAT}x`}{emp.TERLAMBAT > 5 && (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && ' • '}{(emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && `Absen: ${emp.SURAT_DOKTER + emp.IJIN_FULL} hari`}</p></div></div></div>))}</div></div></div>)}</div></motion.div>);
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300"><div className="flex flex-wrap gap-4 mb-6 no-print"><button onClick={() => setSelectedMetric('performance')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'performance' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><Award className="w-4 h-4" /> Performa Divisi</button><button onClick={() => setSelectedMetric('trends')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'trends' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><TrendingUp className="w-4 h-4" /> Tren & Pola</button><button onClick={() => setSelectedMetric('risks')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'risks' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><AlertTriangle className="w-4 h-4" /> Identifikasi Risiko</button></div>{selectedMetric === 'performance' && (<div className="grid grid-cols-1 lg:grid-cols-2 gap-8"><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Skor Kinerja per Divisi</h3><div className="space-y-4">{Object.values(analyticsData).map(div => (<div key={div.name} className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg"><div className="flex justify-between items-center mb-2"><span className="font-medium text-gray-800 dark:text-gray-200">{div.name}</span><span className="text-lg font-bold text-sky-700 dark:text-sky-400">{div.avgPerformance.toFixed(1)}</span></div><div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2"><div className="bg-gradient-to-r from-sky-500 to-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${div.avgPerformance}%` }}></div></div><div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{div.employees.length} karyawan • Rata-rata Terlambat: {div.employees.length > 0 ? (div.totalTardiness / div.employees.length).toFixed(1) : 0}</div></div>))}</div></div><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">5 Karyawan Terbaik</h3><div className="space-y-3">{topPerformers.map((emp, index) => (<div key={emp.NAMA} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-600' : 'bg-sky-600'}`}>{index + 1}</div><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI}</p></div></div><div className="text-right"><p className="text-lg font-bold text-sky-700 dark:text-sky-400">{emp.score.toFixed(1)}</p><p className="text-xs text-gray-500 dark:text-gray-400">Skor Kinerja</p></div></div>))}</div></div></div>)}{selectedMetric === 'trends' && (<div className="space-y-6"><div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Analisis Tren Kehadiran</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="text-center"><div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.TERLAMBAT, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Terlambat/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-red-600 dark:text-red-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.SURAT_DOKTER + emp.IJIN_FULL, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Absen/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.CUTI, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Cuti/Karyawan</div></div></div></div></div>)}{selectedMetric === 'risks' && (<div className="space-y-6"><div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-red-800 dark:text-red-300 flex items-center"><AlertTriangle className="w-5 h-5 mr-2" /> Karyawan Berisiko Tinggi</h3><div className="space-y-3">{aggregatedData.filter(emp => emp.TERLAMBAT > 5 || (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3).slice(0, 5).map(emp => (<div key={emp.NAMA} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-red-200 dark:border-red-800/50"><div className="flex justify-between items-center"><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI} - {emp.JABATAN}</p></div><div className="text-right"><p className="text-sm text-red-600 dark:text-red-400">{emp.TERLAMBAT > 5 && `Terlambat: ${emp.TERLAMBAT}x`}{emp.TERLAMBAT > 5 && (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && ' • '}{(emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && `Absen: ${emp.SURAT_DOKTER + emp.IJIN_FULL} hari`}</p></div></div></div>))}</div></div></div>)}</div></motion.div>);
 };
 
-const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
-    const [periodA, setPeriodA] = useState('');
-    const [periodB, setPeriodB] = useState('');
+const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAiLoading }) => {
+    const [yearA, setYearA] = useState('');
+    const [monthA, setMonthA] = useState('');
+    const [yearB, setYearB] = useState('');
+    const [monthB, setMonthB] = useState('');
 
-    const getMonthStats = useCallback((month) => {
-        const monthData = data.filter(row => row.BULAN === month);
+    const getStats = useCallback((year, month) => {
+        let filteredData = data;
+        if (year !== 'semua') {
+            filteredData = filteredData.filter(row => row.TAHUN === year);
+        }
+        if (month !== 'semua') {
+            filteredData = filteredData.filter(row => row.BULAN === month);
+        }
+        
         return {
-            tardiness: monthData.reduce((sum, row) => sum + row.TERLAMBAT, 0),
-            absence: monthData.reduce((sum, row) => sum + row.SURAT_DOKTER + row.IJIN_FULL, 0),
-            workDays: monthData.reduce((sum, row) => sum + row.HARI_KERJA, 0),
-            employees: new Set(monthData.map(row => row.NAMA)).size
+            tardiness: filteredData.reduce((sum, row) => sum + row.TERLAMBAT, 0),
+            absence: filteredData.reduce((sum, row) => sum + row.SURAT_DOKTER + row.IJIN_FULL, 0),
+            workDays: filteredData.reduce((sum, row) => sum + row.HARI_KERJA, 0),
+            employees: new Set(filteredData.map(row => row.NAMA)).size
         };
     }, [data]);
 
-    const statsA = useMemo(() => periodA ? getMonthStats(periodA) : null, [periodA, getMonthStats]);
-    const statsB = useMemo(() => periodB ? getMonthStats(periodB) : null, [periodB, getMonthStats]);
+    const statsA = useMemo(() => yearA && monthA ? getStats(yearA, monthA) : null, [yearA, monthA, getStats]);
+    const statsB = useMemo(() => yearB && monthB ? getStats(yearB, monthB) : null, [yearB, monthB, getStats]);
 
     const getChangeIcon = (valueA, valueB) => {
         if (valueA === valueB) return <Minus className="w-4 h-4 text-gray-500" />;
@@ -949,7 +1318,9 @@ const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
 
     const handleAnalyze = () => {
         if (!statsA || !statsB) return;
-        onAnalyze({ periodA, periodB, statsA, statsB });
+        const periodAString = `${monthA} ${yearA}`;
+        const periodBString = `${monthB} ${yearB}`;
+        onAnalyze({ periodA: periodAString, periodB: periodBString, statsA, statsB });
     };
 
     return (
@@ -971,28 +1342,30 @@ const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
             {/* Period Selection */}
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm no-print transition-colors duration-300">
                 <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Pilih Periode untuk Dibandingkan</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                    <div>
-                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Periode A</label>
-                        <AnimatedDropdown
-                            options={availableMonths}
-                            selectedValue={periodA}
-                            onValueChange={setPeriodA}
-                            placeholder="Pilih periode..."
-                        />
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
+                    <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tahun A</label>
+                            <AnimatedDropdown options={availableYears} selectedValue={yearA} onValueChange={setYearA} placeholder="Pilih tahun..." includeAllOption={true} />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Bulan A</label>
+                            <AnimatedDropdown options={availableMonths} selectedValue={monthA} onValueChange={setMonthA} placeholder="Pilih bulan..." includeAllOption={true}/>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Periode B</label>
-                        <AnimatedDropdown
-                            options={availableMonths}
-                            selectedValue={periodB}
-                            onValueChange={setPeriodB}
-                            placeholder="Pilih periode..."
-                        />
+                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tahun B</label>
+                            <AnimatedDropdown options={availableYears} selectedValue={yearB} onValueChange={setYearB} placeholder="Pilih tahun..." includeAllOption={true} />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Bulan B</label>
+                            <AnimatedDropdown options={availableMonths} selectedValue={monthB} onValueChange={setMonthB} placeholder="Pilih bulan..." includeAllOption={true}/>
+                        </div>
                     </div>
                     <button
                         onClick={handleAnalyze}
-                        disabled={!periodA || !periodB || isAiLoading || periodA === periodB}
+                        disabled={!yearA || !monthA || !yearB || !monthB || isAiLoading}
                         className="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow hover:shadow-lg"
                     >
                         <Sparkles className="w-5 h-5" />
@@ -1006,7 +1379,7 @@ const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Period A Stats */}
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode A: {periodA}</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode A: {monthA} {yearA}</h3>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="text-gray-600 dark:text-gray-400">Total Keterlambatan</span>
@@ -1029,7 +1402,7 @@ const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
 
                     {/* Period B Stats */}
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode B: {periodB}</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode B: {monthB} {yearB}</h3>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="text-gray-600 dark:text-gray-400">Total Keterlambatan</span>
@@ -1079,32 +1452,53 @@ const ComparisonPage = ({ data, availableMonths, onAnalyze, isAiLoading }) => {
     );
 };
 
-const PredictionPage = ({ data, availableEmployees, showError }) => {
+const ToolsPage = ({ data, availableEmployees, showToast }) => {
     const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
     const [isPredicting, setIsPredicting] = useState(false);
     const [predictionResult, setPredictionResult] = useState(null);
-    const { getEmployeeByName } = useAttendanceData(data);
+    const resultsRef = useRef(null);
 
     const handlePredict = async () => {
-        if (!selectedEmployeeName) return;
-        
-        const employeeData = getEmployeeByName(selectedEmployeeName);
-        if (!employeeData) {
-            showError("Tidak dapat menemukan data untuk karyawan yang dipilih.", "Data Tidak Ditemukan");
+        if (!selectedEmployeeName) {
+            showToast("Harap pilih seorang karyawan untuk prediksi.", "error");
             return;
         }
+
+        const employeeRecords = data.filter(row => row.NAMA === selectedEmployeeName);
+        if (employeeRecords.length === 0) {
+            showToast("Tidak ada data yang ditemukan untuk karyawan yang dipilih.", "error");
+            return;
+        }
+
+        const sortedRecords = [...employeeRecords].sort((a, b) => {
+            if (b.TAHUN !== a.TAHUN) {
+                return b.TAHUN - a.TAHUN;
+            }
+            return getMonthNumber(b.BULAN) - getMonthNumber(a.BULAN);
+        });
+
+        const latestMonthData = sortedRecords[0];
 
         setIsPredicting(true);
         setPredictionResult(null);
         try {
-            const result = await mlModelService.predictLeave(employeeData);
+            const result = await mlModelService.predictLeave(latestMonthData);
             setPredictionResult(result);
+            showToast(`Prediksi untuk ${selectedEmployeeName} berhasil dibuat.`, 'success');
         } catch (error) {
-            showError(error.message, 'Kesalahan Prediksi');
+            showToast(error.message, 'error');
         } finally {
             setIsPredicting(false);
         }
     };
+
+    useEffect(() => {
+        if (predictionResult && resultsRef.current) {
+            setTimeout(() => {
+                 resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100); 
+        }
+    }, [predictionResult]);
 
     return (
         <motion.div
@@ -1117,22 +1511,22 @@ const PredictionPage = ({ data, availableEmployees, showError }) => {
             <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 text-white">
                 <div className="flex items-center gap-3 mb-4">
                     <BrainCircuit className="w-8 h-8" />
-                    <h2 className="text-3xl font-bold">Model Prediksi Cuti Karyawan</h2>
+                    <h2 className="text-3xl font-bold">Alat & Prediksi</h2>
                 </div>
-                <p className="text-sky-100 text-lg">Gunakan model prediktif untuk mengantisipasi kemungkinan karyawan mengambil cuti.</p>
+                <p className="text-sky-100 text-lg">Gunakan alat prediktif untuk perencanaan SDM yang lebih baik.</p>
             </div>
 
             {/* Prediction Controls */}
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Jalankan Prediksi</h3>
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Jalankan Prediksi Cuti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     <div className="md:col-span-2">
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Pilih Karyawan</label>
-                        <AnimatedDropdown
+                        <SearchableDropdown
                             options={availableEmployees}
                             selectedValue={selectedEmployeeName}
                             onValueChange={setSelectedEmployeeName}
-                            placeholder="Pilih nama karyawan..."
+                            placeholder="Pilih atau cari nama karyawan..."
                         />
                     </div>
                     <button
@@ -1164,6 +1558,7 @@ const PredictionPage = ({ data, availableEmployees, showError }) => {
             )}
             {predictionResult && (
                 <motion.div
+                    ref={resultsRef}
                     className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-lg overflow-hidden"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -1185,147 +1580,88 @@ const PredictionPage = ({ data, availableEmployees, showError }) => {
                 </motion.div>
             )}
             </AnimatePresence>
+            
+            <div className="bg-sky-50 dark:bg-slate-800 border border-sky-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
+                <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0">
+                        <BrainCircuit className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+                    </div>
+                    <div>
+                        <h4 className="text-lg font-semibold text-sky-900 dark:text-sky-300 mb-1">Bagaimana Prediksi Ini Bekerja?</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Model ini menggunakan data historis karyawan yang Anda pilih (seperti total absensi, keterlambatan, dan sisa cuti) dan membandingkannya dengan pola yang telah dipelajari dari seluruh data absensi perusahaan untuk memprediksi kemungkinan jumlah cuti yang akan diambil pada BULAN berikutnya.
+                        </p>
+                    </div>
+                </div>
+            </div>
 
         </motion.div>
     );
 };
 
+const PayrollPage = ({ data, availableYears, availableMonths }) => {
+    const [selectedYear, setSelectedYear] = useState(availableYears[0] || '');
+    const [selectedMonth, setSelectedMonth] = useState(availableMonths[0] || '');
 
-const OverallDashboard = ({ data, onAnalyzeIndividual, onAnalyzeOverall, isAiLoading }) => {
-    const [selectedMonth, setSelectedMonth] = useState('semua');
-    const [selectedEmployee, setSelectedEmployee] = useState('semua');
-    const [selectedDivision, setSelectedDivision] = useState('semua');
-    const [expandedDivision, setExpandedDivision] = useState(null);
-    const { availableMonths, availableEmployees, availableDivisions } = useAttendanceData(data);
+    const payrollData = useMemo(() => {
+        if (!selectedYear || !selectedMonth) return [];
 
-    // Filter available employees based on the selected division
-    const filteredAvailableEmployees = useMemo(() => {
-        if (selectedDivision === 'semua') {
-            return availableEmployees;
-        }
-        const employeesInDivision = data
-            .filter(item => item.DIVISI === selectedDivision)
-            .map(item => item.NAMA);
-        return [...new Set(employeesInDivision)].sort();
-    }, [data, selectedDivision, availableEmployees]);
+        const filteredData = data.filter(row => row.TAHUN === selectedYear && row.BULAN === selectedMonth);
 
-    // Reset employee filter if the selected employee is not in the new list
-    useEffect(() => {
-        if (selectedEmployee !== 'semua' && !filteredAvailableEmployees.includes(selectedEmployee)) {
-            setSelectedEmployee('semua');
-        }
-    }, [selectedDivision, selectedEmployee, filteredAvailableEmployees]);
-
-
-    // This hook is now specific to this filtered view
-    const useFilteredData = (allData, month, employee, division) => {
-        return useMemo(() => {
-            let filtered = allData;
-            if (month !== 'semua') filtered = filtered.filter(item => item.BULAN === month);
-            if (employee !== 'semua') filtered = filtered.filter(item => item.NAMA === employee);
-            if (division !== 'semua') filtered = filtered.filter(item => item.DIVISI === division);
-
-            const aggregated = Array.from(filtered.reduce((map, row) => {
-                const name = row.NAMA;
-                if (!name) return map;
-                if (!map.has(name)) {
-                    map.set(name, { NAMA: name, DIVISI: row.DIVISI || 'N/A', JABATAN: row.JABATAN || 'N/A', TAHUN_MASUK: row.TAHUN_MASUK || 0, LAMA_BEKERJA: row.LAMA_BEKERJA || 0, HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0 });
-                }
-                const stats = map.get(name);
-                stats.HARI_KERJA += row.HARI_KERJA;
-                stats.TERLAMBAT += row.TERLAMBAT;
-                stats.SURAT_DOKTER += row.SURAT_DOKTER;
-                stats.IJIN_FULL += row.IJIN_FULL;
-                stats.CUTI += row.CUTI;
-                return map;
-            }, new Map()).values());
-
-            const kpis = {
-                totalEmployees: new Set(filtered.map(item => item.NAMA)).size,
-                totalTardiness: filtered.reduce((sum, item) => sum + item.TERLAMBAT, 0),
-                totalAbsence: filtered.reduce((sum, item) => sum + item.SURAT_DOKTER + item.IJIN_FULL, 0),
-                totalWorkDays: filtered.reduce((sum, item) => sum + item.HARI_KERJA, 0)
-            };
-
-            const topTardiness = [...aggregated].sort((a, b) => b.TERLAMBAT - a.TERLAMBAT).slice(0, 10);
-            const absenceDistribution = { sakit: filtered.reduce((sum, item) => sum + item.SURAT_DOKTER, 0), izin: filtered.reduce((sum, item) => sum + item.IJIN_FULL, 0), cuti: filtered.reduce((sum, item) => sum + item.CUTI, 0) };
-
-            const tableData = [...aggregated].sort((a, b) => a.NAMA.localeCompare(b.NAMA));
-
-            const divisionalAnalysis = Object.values(aggregated.reduce((acc, emp) => {
-                const div = emp.DIVISI || 'N/A';
-                if (!acc[div]) acc[div] = { name: div, employeeCount: 0, totalTardiness: 0, totalLeave: 0, totalAbsence: 0 };
-                acc[div].employeeCount++;
-                acc[div].totalTardiness += emp.TERLAMBAT;
-                acc[div].totalAbsence += emp.SURAT_DOKTER + emp.IJIN_FULL;
-                acc[div].totalLeave += emp.CUTI;
-                return acc;
-            }, {})).sort((a, b) => a.name.localeCompare(b.name));
-
-            const deepInsights = (() => {
-                if (aggregated.length === 0) return null;
-
-                const tenureGroups = {
-                    new: { totalTardiness: 0, count: 0 }, // < 2 years
-                    mid: { totalTardiness: 0, count: 0 }, // 2-5 years
-                    senior: { totalTardiness: 0, count: 0 }, // > 5 years
-                };
-                aggregated.forEach(emp => {
-                    const tenure = emp.LAMA_BEKERJA > 0 ? emp.LAMA_BEKERJA : (emp.TAHUN_MASUK > 0 ? new Date().getFullYear() - emp.TAHUN_MASUK : 0);
-                    if (tenure < 2) { tenureGroups.new.totalTardiness += emp.TERLAMBAT; tenureGroups.new.count++; }
-                    else if (tenure <= 5) { tenureGroups.mid.totalTardiness += emp.TERLAMBAT; tenureGroups.mid.count++; }
-                    else { tenureGroups.senior.totalTardiness += emp.TERLAMBAT; tenureGroups.senior.count++; }
+        const employeeMap = new Map();
+        filteredData.forEach(row => {
+            const name = row.NAMA;
+            if (!employeeMap.has(name)) {
+                employeeMap.set(name, {
+                    NAMA: name,
+                    DIVISI: row.DIVISI || 'N/A',
+                    GAJI_POKOK: row.GAJI_POKOK || 0,
+                    HARI_KERJA: 0,
+                    TERLAMBAT: 0,
+                    SURAT_DOKTER: 0,
+                    IJIN_FULL: 0,
                 });
-                const avgNew = tenureGroups.new.count > 0 ? (tenureGroups.new.totalTardiness / tenureGroups.new.count) : 0;
-                const avgMid = tenureGroups.mid.count > 0 ? (tenureGroups.mid.totalTardiness / tenureGroups.mid.count) : 0;
-                const avgSenior = tenureGroups.senior.count > 0 ? (tenureGroups.senior.totalTardiness / tenureGroups.senior.count) : 0;
-                let tenureTardinessMessage = `Rata-rata keterlambatan: Karyawan baru (${avgNew.toFixed(1)}x), Mid-level (${avgMid.toFixed(1)}x), Senior (${avgSenior.toFixed(1)}x).`;
-                if (avgNew > avgMid && avgNew > avgSenior) { tenureTardinessMessage += " Karyawan baru cenderung lebih sering terlambat."; }
-                else if (avgSenior > avgMid && avgSenior > avgNew) { tenureTardinessMessage += " Karyawan senior cenderung lebih sering terlambat."; }
-                else { tenureTardinessMessage += " Tidak ada korelasi jelas antara lama kerja dan keterlambatan."; }
+            }
+            const stats = employeeMap.get(name);
+            stats.HARI_KERJA += row.HARI_KERJA;
+            stats.TERLAMBAT += row.TERLAMBAT;
+            stats.SURAT_DOKTER += row.SURAT_DOKTER;
+            stats.IJIN_FULL += row.IJIN_FULL;
+        });
 
-                const divPerf = divisionalAnalysis.map(div => ({ ...div, avgTardiness: div.employeeCount > 0 ? div.totalTardiness / div.employeeCount : 0 })).sort((a, b) => a.avgTardiness - b.avgTardiness);
-                const bestDivision = divPerf.length > 0 ? divPerf[0] : null;
-                const worstDivision = divPerf.length > 1 ? divPerf[divPerf.length - 1] : null;
+        return Array.from(employeeMap.values()).map(emp => {
+            const mealAllowance = emp.HARI_KERJA * 20000;
+            const transportAllowance = emp.HARI_KERJA * 10000;
+            const incentive = 100000; // Monthly incentive
+            const totalAllowances = mealAllowance + transportAllowance + incentive;
 
-                const sortedByDiscipline = [...aggregated].sort((a, b) => (a.TERLAMBAT + a.IJIN_FULL) - (b.TERLAMBAT + b.IJIN_FULL));
-                const bestEmployee = sortedByDiscipline.length > 0 ? sortedByDiscipline[0] : null;
+            const lateDeduction = emp.TERLAMBAT * 5000;
+            const sickDeduction = emp.SURAT_DOKTER * 10000;
+            const permitDeduction = emp.IJIN_FULL * 10000;
+            const totalDeductions = lateDeduction + sickDeduction + permitDeduction;
 
-                return { tenureTardiness: tenureTardinessMessage, bestDivision, worstDivision, bestEmployee };
-            })();
+            const grossSalary = emp.GAJI_POKOK + totalAllowances;
+            const finalSalary = grossSalary - totalDeductions;
 
-            return { kpis, topTardiness, absenceDistribution, tableData, divisionalAnalysis, deepInsights };
-        }, [allData, month, employee, division]);
-    };
+            return {
+                ...emp,
+                totalAllowances,
+                totalDeductions,
+                finalSalary
+            };
+        });
+    }, [data, selectedYear, selectedMonth]);
 
-    const { kpis, topTardiness, absenceDistribution, tableData, divisionalAnalysis, deepInsights } = useFilteredData(data, selectedMonth, selectedEmployee, selectedDivision);
-
-    const tardinessChartOptions = { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { title: (ctx) => topTardiness[ctx[0].dataIndex]?.NAMA || '' } } } };
-    const tardinessChartData = { labels: topTardiness.map(item => item.NAMA.length > 15 ? item.NAMA.substring(0, 15) + '...' : item.NAMA), datasets: [{ label: 'Jumlah Keterlambatan', data: topTardiness.map(item => item.TERLAMBAT), backgroundColor: 'rgba(3, 105, 161, 0.8)', borderColor: 'rgba(3, 105, 161, 1)', borderWidth: 1, borderRadius: 6 }] };
-    const totalAbsence = Object.values(absenceDistribution).reduce((a, b) => a + b, 0);
-    const absenceChartOptions = { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', padding: 20 }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.formattedValue} hari (${(totalAbsence > 0 ? ((ctx.parsed * 100) / totalAbsence).toFixed(1) : 0)}%)` } } } };
-    const absenceChartData = { labels: ['Sakit (Surat Dokter)', 'Izin', 'Cuti'], datasets: [{ label: 'Jumlah Hari', data: [absenceDistribution.sakit, absenceDistribution.izin, absenceDistribution.cuti], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(249, 115, 22, 0.8)', 'rgba(59, 130, 246, 0.8)'], borderColor: ['#ffffff', '#ffffff', '#ffffff'], borderWidth: 4 }] };
-
-    const handleOverallAnalysisClick = () => {
-        onAnalyzeOverall({ kpis, chartData: { topTardiness, absenceDistribution }, selectedMonth, selectedEmployee });
-    };
-
-    const handleDivisionClick = (divisionName) => {
-        setExpandedDivision(prev => (prev === divisionName ? null : divisionName));
-    };
-
-    const handleExport = () => {
-        exportService.exportToCsv(tableData, `rekap_absensi_${selectedMonth}.csv`);
-    };
-
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-    };
-
-    const itemVariants = {
-        hidden: { y: 20, opacity: 0 },
-        visible: { y: 0, opacity: 1 }
+    const handleExportPdf = () => {
+        const headers = ["Nama Karyawan", "Gaji Pokok", "Tunjangan", "Potongan", "Gaji Akhir"];
+        const body = payrollData.map(emp => [
+            emp.NAMA,
+            formatCurrency(emp.GAJI_POKOK),
+            formatCurrency(emp.totalAllowances),
+            formatCurrency(emp.totalDeductions),
+            formatCurrency(emp.finalSalary)
+        ]);
+        exportService.exportToPdf(`Laporan Gaji ${selectedMonth} ${selectedYear}`, headers, body, `gaji_${selectedMonth}_${selectedYear}.pdf`);
     };
 
     return (
@@ -1336,195 +1672,88 @@ const OverallDashboard = ({ data, onAnalyzeIndividual, onAnalyzeOverall, isAiLoa
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
         >
+            <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 text-white">
+                <div className="flex items-center gap-3 mb-4">
+                    <DollarSign className="w-8 h-8" />
+                    <h2 className="text-3xl font-bold">Laporan Gaji Karyawan</h2>
+                </div>
+                <p className="text-sky-100 text-lg">Tinjau dan ekspor laporan gaji bulanan untuk seluruh karyawan.</p>
+            </div>
+
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm no-print transition-colors duration-300">
-                <div className="flex flex-col lg:flex-row flex-wrap gap-6 items-center">
-                    {/* Filters */}
-                    <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Calendar className="w-6 h-6 text-sky-700 dark:text-sky-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <AnimatedDropdown options={availableMonths} selectedValue={selectedMonth} onValueChange={setSelectedMonth} placeholder="Semua Bulan" includeAllOption={true} />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Briefcase className="w-6 h-6 text-sky-700 dark:text-sky-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <AnimatedDropdown options={availableDivisions} selectedValue={selectedDivision} onValueChange={setSelectedDivision} placeholder="Semua Divisi" includeAllOption={true} />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 min-w-0">
-                            <UserCheck className="w-6 h-6 text-sky-700 dark:text-sky-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <AnimatedDropdown options={filteredAvailableEmployees} selectedValue={selectedEmployee} onValueChange={setSelectedEmployee} placeholder="Semua Karyawan" includeAllOption={true} />
-                            </div>
-                        </div>
+                <div className="flex flex-col sm:flex-row gap-4 items-center">
+                    <div className="w-full sm:w-48">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tahun</label>
+                        <AnimatedDropdown options={availableYears} selectedValue={selectedYear} onValueChange={setSelectedYear} placeholder="Pilih Tahun" />
                     </div>
-                    {/* Buttons */}
-                    <div className="flex-shrink-0 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                        <button onClick={handleOverallAnalysisClick} disabled={isAiLoading} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow hover:shadow-lg">
-                            <Sparkles className="w-5 h-5" />
-                            {isAiLoading ? 'Menganalisis...' : 'Analisis Umum'}
-                        </button>
-                        <button onClick={handleExport} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 shadow hover:shadow-lg">
-                            <Download size={16} /> Ekspor Data
-                        </button>
+                    <div className="w-full sm:w-48">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bulan</label>
+                        <AnimatedDropdown options={availableMonths} selectedValue={selectedMonth} onValueChange={setSelectedMonth} placeholder="Pilih Bulan" />
                     </div>
+                    <div className="flex-1" />
+                    <button onClick={handleExportPdf} disabled={!payrollData || payrollData.length === 0} className="w-full sm:w-auto mt-4 sm:mt-0 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Download size={16} /> Ekspor PDF
+                    </button>
                 </div>
             </div>
 
-            <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" variants={containerVariants} initial="hidden" animate="visible">
-                <motion.div variants={itemVariants}><KpiCard icon={<Users />} title="Total Karyawan" value={kpis.totalEmployees} colorClass={{ bg: 'bg-sky-100 dark:bg-sky-900/50', text: 'text-sky-700 dark:text-sky-400' }} /></motion.div>
-                <motion.div variants={itemVariants}><KpiCard icon={<Clock />} title="Total Keterlambatan" value={kpis.totalTardiness} unit="kali" colorClass={{ bg: 'bg-orange-100 dark:bg-orange-900/50', text: 'text-orange-600 dark:text-orange-400' }} /></motion.div>
-                <motion.div variants={itemVariants}><KpiCard icon={<UserX />} title="Total Absensi" value={kpis.totalAbsence} unit="hari" colorClass={{ bg: 'bg-red-100 dark:bg-red-900/50', text: 'text-red-600 dark:text-red-400' }} /></motion.div>
-                <motion.div variants={itemVariants}><KpiCard icon={<Calendar />} title="Total Hari Kerja" value={kpis.totalWorkDays} colorClass={{ bg: 'bg-green-100 dark:bg-green-900/50', text: 'text-green-600 dark:text-green-400' }} /></motion.div>
-            </motion.div>
-
-            {/* Deep Insights Section */}
-            {deepInsights && (
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                    <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center gap-2">
-                        <Zap className="text-yellow-500" /> Wawasan Mendalam
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                        <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
-                            <p className="font-semibold text-slate-700 dark:text-slate-200">Korelasi Lama Bekerja & Keterlambatan</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{deepInsights.tenureTardiness}</p>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
-                            <p className="font-semibold text-slate-700 dark:text-slate-200">Divisi Paling Disiplin</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{deepInsights.bestDivision ? `${deepInsights.bestDivision.name} (Rata-rata telat: ${deepInsights.bestDivision.avgTardiness.toFixed(1)}x)` : 'N/A'}</p>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
-                            <p className="font-semibold text-slate-700 dark:text-slate-200">Karyawan Paling Disiplin</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{deepInsights.bestEmployee ? `${deepInsights.bestEmployee.NAMA} (Telat: ${deepInsights.bestEmployee.TERLAMBAT}x)` : 'N/A'}</p>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-200 dark:border-slate-600 space-y-2">
-                            <p className="font-semibold text-slate-700 dark:text-slate-200">Divisi Perlu Perhatian</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{deepInsights.worstDivision && deepInsights.worstDivision.name !== deepInsights.bestDivision.name ? `${deepInsights.worstDivision.name} (Rata-rata telat: ${deepInsights.worstDivision.avgTardiness.toFixed(1)}x)` : 'Semua divisi menunjukkan performa serupa.'}</p>
-                        </div>
-                    </div>
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm transition-colors duration-300 overflow-hidden">
+                <div className="p-6">
+                    <h3 className="text-xl font-semibold text-sky-900 dark:text-sky-300">Detail Gaji untuk {selectedMonth} {selectedYear}</h3>
                 </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                <div className="lg:col-span-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300 flex flex-col">
-                    <h3 className="text-xl font-semibold mb-6 text-sky-900 dark:text-sky-300 flex items-center flex-shrink-0">
-                        <div className="w-3 h-3 bg-sky-600 rounded-full mr-3"></div>
-                        10 Karyawan Paling Sering Terlambat
-                    </h3>
-                    <div className="flex-grow h-80">
-                        <ChartWrapper chartId="chart-tardiness" type="bar" data={tardinessChartData} options={tardinessChartOptions} fallbackText={{ icon: <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Tidak ada data keterlambatan" }} />
-                    </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-slate-700 dark:text-gray-300">
+                            <tr>
+                                <th scope="col" className="px-6 py-3">Nama Karyawan</th>
+                                <th scope="col" className="px-6 py-3 text-right">Gaji Pokok</th>
+                                <th scope="col" className="px-6 py-3 text-right">Total Tunjangan</th>
+                                <th scope="col" className="px-6 py-3 text-right">Total Potongan</th>
+                                <th scope="col" className="px-6 py-3 text-right font-bold">Gaji Akhir</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {payrollData.length > 0 ? payrollData.map(emp => (
+                                <tr key={emp.NAMA} className="bg-white dark:bg-slate-800 border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600/50">
+                                    <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">{emp.NAMA}</th>
+                                    <td className="px-6 py-4 text-right">{formatCurrency(emp.GAJI_POKOK)}</td>
+                                    <td className="px-6 py-4 text-right text-green-600 dark:text-green-400">{formatCurrency(emp.totalAllowances)}</td>
+                                    <td className="px-6 py-4 text-right text-red-600 dark:text-red-400">(-) {formatCurrency(emp.totalDeductions)}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-sky-800 dark:text-sky-300">{formatCurrency(emp.finalSalary)}</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="5" className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                        Pilih tahun dan bulan untuk menampilkan data gaji.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-                <div className="lg:col-span-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300 flex flex-col">
-                    <h3 className="text-xl font-semibold mb-6 text-sky-900 dark:text-sky-300 flex items-center flex-shrink-0">
-                        <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
-                        Distribusi Tipe Absensi
-                    </h3>
-                    <div className="flex-grow h-80">
-                        <ChartWrapper chartId="chart-absence" type="doughnut" data={absenceChartData} options={absenceChartOptions} fallbackText={{ icon: <UserX className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Tidak ada data absensi" }} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Divisional Analysis Section */}
-            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                <h3 className="text-xl font-semibold mb-6 text-sky-900 dark:text-sky-300">Analisis per Divisi</h3>
-                <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" variants={containerVariants} initial="hidden" animate="visible">
-                    {divisionalAnalysis.map(div => (
-                        <motion.div key={div.name} variants={itemVariants}>
-                            <div onClick={() => handleDivisionClick(div.name)} className={`bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg border border-gray-200 dark:border-slate-700 cursor-pointer transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${expandedDivision === div.name ? 'ring-2 ring-sky-500' : 'hover:border-sky-400'}`}>
-                                <h4 className="font-semibold text-lg text-sky-800 dark:text-sky-400 mb-3 flex items-center">
-                                    <Briefcase size={20} className="mr-2" />
-                                    {div.name}
-                                </h4>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600 dark:text-gray-400 flex items-center">
-                                            <Users size={14} className="mr-2" />Jml Karyawan
-                                        </span>
-                                        <span className="font-medium text-gray-800 dark:text-gray-200">{div.employeeCount}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600 dark:text-gray-400 flex items-center">
-                                            <Clock size={14} className="mr-2" />Total Terlambat
-                                        </span>
-                                        <span className="font-medium text-gray-800 dark:text-gray-200">{div.totalTardiness} kali</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600 dark:text-gray-400 flex items-center">
-                                            <Clock size={14} className="mr-2" />Rata-rata Terlambat
-                                        </span>
-                                        <span className="font-medium text-gray-800 dark:text-gray-200">{div.employeeCount > 0 ? (div.totalTardiness / div.employeeCount).toFixed(1) : 0} / kary.</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600 dark:text-gray-400 flex items-center">
-                                            <UserMinus size={14} className="mr-2" />Total Cuti
-                                        </span>
-                                        <span className="font-medium text-gray-800 dark:text-gray-200">{div.totalLeave} hari</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </motion.div>
-                <AnimatePresence>
-                    {expandedDivision && (
-                        <motion.div
-                            className="mt-6 border-t dark:border-slate-700 pt-6"
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-lg font-semibold text-sky-900 dark:text-sky-300">Detail Karyawan Divisi: {expandedDivision}</h4>
-                                <button onClick={() => exportService.exportToCsv(tableData.filter(emp => emp.DIVISI === expandedDivision), `detail_divisi_${expandedDivision}.csv`)} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-3 text-xs rounded-lg flex items-center gap-1 no-print">
-                                    <Download size={14} /> Ekspor Divisi
-                                </button>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead>
-                                        <tr className="border-b-2 border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/50">
-                                            <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Nama Karyawan</th>
-                                            <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300 text-center">Terlambat</th>
-                                            <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300 text-center">Absen (Sakit/Izin)</th>
-                                            <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300 text-center no-print">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {tableData.filter(emp => emp.DIVISI === expandedDivision).map(employee => (
-                                            <tr key={employee.NAMA} className="border-b border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30">
-                                                <td className="p-3 font-medium text-gray-800 dark:text-gray-200">{employee.NAMA}</td>
-                                                <td className="p-3 text-center text-gray-700 dark:text-gray-300">{employee.TERLAMBAT}</td>
-                                                <td className="p-3 text-center text-gray-700 dark:text-gray-300">{employee.SURAT_DOKTER + employee.IJIN_FULL}</td>
-                                                <td className="p-3 no-print flex justify-center items-center">
-                                                    <button onClick={() => onAnalyzeIndividual(employee)} disabled={isAiLoading} className="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-1 px-3 text-xs rounded-lg transition-all flex items-center gap-1 disabled:opacity-50">
-                                                        <Sparkles size={14} /> Analisis
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
         </motion.div>
     );
 };
 
 
-const Sidebar = ({ employees, activeView, onViewChange, onReset, isSidebarCollapsed, onToggleCollapse }) => {
+const Sidebar = ({ employees, activePath, onReset, isSidebarCollapsed, onToggleCollapse }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredEmployees = useMemo(() => {
         if (!searchTerm) return employees;
         return employees.filter(name => name.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [employees, searchTerm]);
+
+    const NavLink = ({ href, icon, children }) => {
+        const isActive = activePath === href.substring(2); // remove '#/'
+        return (
+            <a href={href} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${isActive ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
+                {icon}
+                {!isSidebarCollapsed && children}
+            </a>
+        );
+    };
 
     return (
         <div className="bg-slate-800 text-slate-200 flex flex-col h-full">
@@ -1535,22 +1764,21 @@ const Sidebar = ({ employees, activeView, onViewChange, onReset, isSidebarCollap
                 </button>
             </div>
             <nav className="p-4 space-y-2">
-                <button onClick={() => onViewChange('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${activeView === 'dashboard' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
-                    <LayoutDashboard className="w-5 h-5" />
-                    {!isSidebarCollapsed && <span>Dasbor Umum</span>}
-                </button>
-                <button onClick={() => onViewChange('analytics')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${activeView === 'analytics' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
-                    <TrendingUp className="w-5 h-5" />
-                    {!isSidebarCollapsed && <span>Analisis & Wawasan</span>}
-                </button>
-                <button onClick={() => onViewChange('comparison')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${activeView === 'comparison' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
-                    <GitCompareArrows className="w-5 h-5" />
-                    {!isSidebarCollapsed && <span>Perbandingan Periode</span>}
-                </button>
-                <button onClick={() => onViewChange('prediction')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${activeView === 'prediction' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
-                    <BrainCircuit className="w-5 h-5" />
-                    {!isSidebarCollapsed && <span>Model Prediksi</span>}
-                </button>
+                <NavLink href="#/dashboard" icon={<LayoutDashboard className="w-5 h-5" />}>
+                    <span>Dasbor Umum</span>
+                </NavLink>
+                <NavLink href="#/payroll" icon={<DollarSign className="w-5 h-5" />}>
+                    <span>Laporan Gaji</span>
+                </NavLink>
+                <NavLink href="#/analytics" icon={<TrendingUp className="w-5 h-5" />}>
+                    <span>Analisis & Wawasan</span>
+                </NavLink>
+                <NavLink href="#/comparison" icon={<GitCompareArrows className="w-5 h-5" />}>
+                    <span>Perbandingan Periode</span>
+                </NavLink>
+                <NavLink href="#/tools" icon={<BrainCircuit className="w-5 h-5" />}>
+                    <span>Alat & Prediksi</span>
+                </NavLink>
             </nav>
             <div className={`flex-grow flex flex-col p-4 border-t border-slate-700 overflow-hidden`}>
                 <h2 className={`text-sm font-semibold text-slate-400 mb-2 whitespace-nowrap ${isSidebarCollapsed ? 'hidden' : ''}`}>DETAIL KARYAWAN</h2>
@@ -1561,23 +1789,23 @@ const Sidebar = ({ employees, activeView, onViewChange, onReset, isSidebarCollap
                 <div className="flex-grow overflow-hidden">
                     <CustomScrollbar>
                         <ul className={`space-y-1 pr-2 ${isSidebarCollapsed ? 'hidden' : ''}`}>
-                            {filteredEmployees.map(name => (
-                                <li key={name}>
-                                    <button onClick={() => onViewChange(name)} className={`w-full text-left flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-colors ${activeView === name ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
-                                        <span className="truncate">{name}</span>
-                                        <ChevronsRight className="w-4 h-4" />
-                                    </button>
-                                </li>
-                            ))}
+                            {filteredEmployees.map(name => {
+                                const href = `#/employee/${encodeURIComponent(name)}`;
+                                const isActive = activePath === `employee/${encodeURIComponent(name)}`;
+                                return (
+                                    <li key={name}>
+                                        <a href={href} className={`w-full text-left flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-colors ${isActive ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>
+                                            <span className="truncate">{name}</span>
+                                            <ChevronsRight className="w-4 h-4" />
+                                        </a>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </CustomScrollbar>
                 </div>
             </div>
-            <div className="p-4 mt-auto border-t border-slate-700 space-y-2">
-                 <button onClick={() => window.print()} className={`w-full flex items-center gap-2 py-2 px-5 rounded-xl transition-all duration-300 bg-sky-600 hover:bg-sky-700 text-white font-semibold transform hover:scale-105 shadow hover:shadow-lg ${isSidebarCollapsed ? 'justify-center' : 'justify-center'}`}>
-                    <Printer className="w-5 h-5" />
-                    <span className={isSidebarCollapsed ? 'hidden' : ''}>Cetak Laporan</span>
-                </button>
+            <div className="p-4 mt-auto border-t border-slate-700">
                 <button onClick={onReset} className={`w-full flex items-center gap-2 py-2 px-5 rounded-xl transition-all duration-300 bg-red-500 hover:bg-red-600 text-white font-semibold transform hover:scale-105 shadow hover:shadow-lg ${isSidebarCollapsed ? 'justify-center' : 'justify-center'}`}>
                     <Upload className="w-5 h-5" />
                     <span className={isSidebarCollapsed ? 'hidden' : ''}>Unggah Baru</span>
@@ -1603,8 +1831,8 @@ const ThemeToggleFAB = () => {
             <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                     key={theme}
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ y: 20, opacity: 0 }}
                     transition={{ duration: 0.2 }}
                 >
@@ -1616,21 +1844,43 @@ const ThemeToggleFAB = () => {
 };
 
 
-const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall, isAiLoading, onAnalyzeComparison, isLoading, showError }) => {
+const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall, isAiLoading, onAnalyzeComparison, isLoading, showToast, location }) => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'analytics', 'comparison', 'prediction', or employee name
-    const { availableEmployees, availableMonths } = useAttendanceData(data);
+    const { availableEmployees, availableYears, availableMonths } = useAttendanceData(data);
 
-    const isEmployeeView = useMemo(() => !['dashboard', 'analytics', 'comparison', 'prediction'].includes(activeView), [activeView]);
+    const renderContent = () => {
+        const path = location.substring(2); // remove '#/'
+        const employeeMatch = path.match(/^employee\/(.*)/);
 
+        if (employeeMatch) {
+            const employeeName = decodeURIComponent(employeeMatch[1]);
+            if (availableEmployees.includes(employeeName)) {
+                return <EmployeeDetailView key={employeeName} employeeName={employeeName} allData={data} onAnalyze={onAnalyzeIndividual} isAiLoading={isAiLoading} />;
+            }
+        }
+        
+        switch (path) {
+            case 'payroll':
+                return <PayrollPage key="payroll" data={data} availableYears={availableYears} availableMonths={availableMonths} />;
+            case 'analytics':
+                return <AnalyticsPage key="analytics" data={data} />;
+            case 'comparison':
+                return <ComparisonPage key="comparison" data={data} availableYears={availableYears} availableMonths={availableMonths} onAnalyze={onAnalyzeComparison} isAiLoading={isAiLoading} />;
+            case 'tools':
+                return <ToolsPage key="tools" data={data} availableEmployees={availableEmployees} showToast={showToast} />;
+            case 'dashboard':
+            default:
+                return <OverallDashboard key="dashboard" data={data} onAnalyzeIndividual={onAnalyzeIndividual} onAnalyzeOverall={onAnalyzeOverall} isAiLoading={isAiLoading} />;
+        }
+    };
+    
     if (isLoading) {
         return (
             <div className="flex h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-300">
                 <aside className={`flex-shrink-0 no-print transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
                     <Sidebar
                         employees={[]}
-                        activeView={activeView}
-                        onViewChange={setActiveView}
+                        activePath={location.substring(2)}
                         onReset={onReset}
                         isSidebarCollapsed={isSidebarCollapsed}
                         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1648,8 +1898,7 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
             <aside className={`flex-shrink-0 no-print transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
                 <Sidebar
                     employees={availableEmployees}
-                    activeView={activeView}
-                    onViewChange={setActiveView}
+                    activePath={location.substring(2)}
                     onReset={onReset}
                     isSidebarCollapsed={isSidebarCollapsed}
                     onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1659,15 +1908,72 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
                 <CustomScrollbar>
                     <div className="p-8 print-main">
                         <AnimatePresence mode="wait">
-                            {activeView === 'dashboard' && <OverallDashboard key="dashboard" data={data} onAnalyzeIndividual={onAnalyzeIndividual} onAnalyzeOverall={onAnalyzeOverall} isAiLoading={isAiLoading} />}
-                            {activeView === 'analytics' && <AnalyticsPage key="analytics" data={data} />}
-                            {activeView === 'comparison' && <ComparisonPage key="comparison" data={data} availableMonths={availableMonths} onAnalyze={onAnalyzeComparison} isAiLoading={isAiLoading} />}
-                            {activeView === 'prediction' && <PredictionPage key="prediction" data={data} availableEmployees={availableEmployees} showError={showError} />}
-                            {isEmployeeView && <EmployeeDetailView key={activeView} employeeName={activeView} allData={data} onAnalyze={onAnalyzeIndividual} isAiLoading={isAiLoading} />}
+                           {renderContent()}
                         </AnimatePresence>
                     </div>
                 </CustomScrollbar>
             </main>
+        </div>
+    );
+};
+
+// --- Toast Notification System ---
+const Toast = ({ message, type, onDismiss }) => {
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onDismiss();
+        }, 5000); // Auto-dismiss after 5 seconds
+
+        return () => clearTimeout(timer);
+    }, [onDismiss]);
+
+    const typeClasses = {
+        success: {
+            bg: 'bg-green-50 dark:bg-green-900/50',
+            border: 'border-green-300 dark:border-green-700',
+            iconBg: 'bg-green-100 dark:bg-green-800',
+            iconColor: 'text-green-600 dark:text-green-300',
+            icon: <CheckCircle className="w-5 h-5" />
+        },
+        error: {
+            bg: 'bg-red-50 dark:bg-red-900/50',
+            border: 'border-red-300 dark:border-red-700',
+            iconBg: 'bg-red-100 dark:bg-red-800',
+            iconColor: 'text-red-600 dark:text-red-300',
+            icon: <AlertTriangle className="w-5 h-5" />
+        },
+    };
+
+    const classes = typeClasses[type] || typeClasses.error;
+
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 50, scale: 0.3 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.5 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            className={`w-full ${classes.bg} border ${classes.border} rounded-xl shadow-lg p-4 flex items-start gap-3`}
+        >
+            <div className={`p-2 rounded-full ${classes.iconBg}`}>
+                {React.cloneElement(classes.icon, { className: classes.iconColor })}
+            </div>
+            <p className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 pt-1">{message}</p>
+            <button onClick={onDismiss} className="p-1 text-gray-500 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 rounded-full">
+                <X className="w-4 h-4" />
+            </button>
+        </motion.div>
+    );
+};
+
+const Toaster = ({ toasts, removeToast }) => {
+    return (
+        <div className="fixed top-4 right-4 z-[100] w-full max-w-xs space-y-3">
+            <AnimatePresence>
+                {toasts.map(toast => (
+                    <Toast key={toast.id} {...toast} onDismiss={() => removeToast(toast.id)} />
+                ))}
+            </AnimatePresence>
         </div>
     );
 };
@@ -1684,26 +1990,57 @@ const App = () => {
     const [allData, setAllData] = useState([]);
     const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
     const [aiModal, setAiModal] = useState({ show: false, title: '', content: '', isLoading: false });
+    const [toasts, setToasts] = useState([]);
+    
+    // --- Hash-based Routing State ---
+    const [location, setLocation] = useState(window.location.hash || '#/dashboard');
+
+    useEffect(() => {
+        const handleHashChange = () => {
+            setLocation(window.location.hash || '#/dashboard');
+        };
+        window.addEventListener('hashchange', handleHashChange);
+        // Set initial route if hash is empty
+        if (!window.location.hash) {
+            window.location.hash = '/dashboard';
+        }
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
 
     useEffect(() => {
         const loadDependencies = async () => {
             try {
-                // We only need PapaParse and Chart.js now
-                if (window.Papa && window.Chart) {
+                // FIX: Check for the autoTable plugin on the jsPDF object
+                if (window.Papa && window.Chart && window.jspdf && window.jspdf.jsPDF.autoTable) {
                     setScriptsLoaded(true);
                     return;
                 }
+                
+                // FIX: Load scripts with dependencies sequentially
                 await Promise.all([
-                    loadScript("https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"),
-                    loadScript("https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"),
+                    loadScript("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"),
+                    loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"),
                 ]);
+                
+                await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+                await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.autotable.min.js");
+
                 setScriptsLoaded(true);
             } catch (error) {
-                console.error("Failed to load scripts:", error);
-                showError("Gagal memuat library eksternal. Silakan muat ulang halaman.", "Kesalahan Pemuatan");
+                console.error("Gagal memuat skrip dependensi:", error);
+                showError(`${error.message}. Harap periksa koneksi internet Anda dan muat ulang halaman.`, "Kesalahan Pemuatan Skrip");
             }
         };
         loadDependencies();
+    }, []);
+
+    const showToast = useCallback((message, type = 'error') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+    }, []);
+
+    const removeToast = useCallback((id) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
     }, []);
 
     const showError = useCallback((message, title = 'Pemberitahuan') => {
@@ -1714,19 +2051,19 @@ const App = () => {
 
     const validateFile = useCallback((file) => {
         if (!file) {
-            showError('Tidak ada file yang dipilih.', 'File Tidak Valid');
+            showToast('Tidak ada file yang dipilih.');
             return false;
         }
         if (!file.name.toLowerCase().endsWith('.csv')) {
-            showError('Format file tidak valid. Harap unggah file dengan format .csv', 'Format Salah');
+            showToast('Format file tidak valid. Harap unggah file .csv');
             return false;
         }
         if (file.size > 10 * 1024 * 1024) {
-            showError('Ukuran file terlalu besar. Maksimal 10MB.', 'File Terlalu Besar');
+            showToast('Ukuran file terlalu besar. Maksimal 10MB.');
             return false;
         }
         return true;
-    }, [showError]);
+    }, [showToast]);
 
     const handleFileSelect = useCallback((file) => {
         if (!scriptsLoaded || !validateFile(file)) return;
@@ -1751,6 +2088,7 @@ const App = () => {
     const resetDashboard = useCallback(() => {
         setAllData([]);
         setShowDashboard(false);
+        window.location.hash = '/dashboard';
     }, []);
 
     const handleGetOverallAnalysis = useCallback(async ({ kpis, chartData, selectedMonth, selectedEmployee }) => {
@@ -1864,8 +2202,10 @@ const App = () => {
         <>
             <GlobalScrollbarStyles />
             <PrintStyles />
+            <Toaster toasts={toasts} removeToast={removeToast} />
             {showDashboard ? (
                 <DashboardLayout
+                    location={location}
                     data={allData}
                     onReset={resetDashboard}
                     onAnalyzeIndividual={handleGetIndividualAnalysis}
@@ -1873,7 +2213,7 @@ const App = () => {
                     onAnalyzeComparison={handleGetComparisonAnalysis}
                     isAiLoading={aiModal.isLoading}
                     isLoading={isLoading}
-                    showError={showError}
+                    showToast={showToast}
                 />
             ) : (
                 <FileUploadScreen onFileSelect={handleFileSelect} isLoading={isLoading} scriptsLoaded={scriptsLoaded} />

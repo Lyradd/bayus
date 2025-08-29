@@ -11,7 +11,7 @@
 //                 <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-slate-700">
 //                     <h3 className="text-xl font-semibold text-sky-900 dark:text-sky-300 flex items-center gap-3">
 //                         <Sparkles className="text-orange-500" />
-//                         {title}
+//                 1            {title}
 //                     </h3>
 //                     <button 
 //                         onClick={onClose} 
