@@ -19,7 +19,7 @@ lerna-debug.log*
 # Environment variables
 # Abaikan semua file .env kecuali file contoh
 .env*
-!.env.example
+venv/
 
 # Editor directories and files
 .vscode/*
