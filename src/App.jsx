@@ -146,6 +146,10 @@ const getMonthNumber = (monthName) => {
 // 1. SERVICES / UTILS
 //================================================================
 
+//================================================================
+// 1. SERVICES / UTILS
+//================================================================
+
 const csvParserService = {
     parse: (file, onComplete, onError) => {
         if (!window.Papa) {
@@ -194,10 +198,15 @@ const csvParserService = {
     processRow: (row) => {
         const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'HARI_KERJA_KOTOR', 'TAHUN_MASUK', 'LAMA_BEKERJA', 'GAJI_POKOK', 'TAHUN', 'CASHBON'];
         const processedRow = { ...row };
+        
         numericColumns.forEach(col => {
-            const cleanValue = String(processedRow[col] || '0').replace(/[^\d.-]/g, '');
+            const cleanValue = String(processedRow[col] || '0')
+                                .replace(',', '.')
+                                .replace(/[^\d.-]/g, ''); 
+                                
             processedRow[col] = parseFloat(cleanValue) || 0;
         });
+
         ['NAMA', 'DIVISI', 'JABATAN', 'BULAN'].forEach(col => {
             if (processedRow[col]) processedRow[col] = String(processedRow[col]).trim();
         });
