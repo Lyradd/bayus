@@ -116,52 +116,6 @@ const useParams = () => {
 
 const useTheme = () => ({ theme: 'light' });
 
-// const ThemeContext = createContext();
-
-// const ThemeProvider = ({ children }) => {
-//     const [theme, setTheme] = useState(() => {
-//         if (typeof window === 'undefined') {
-//             return 'light';
-//         }
-//         const savedTheme = window.localStorage.getItem('theme');
-//         if (savedTheme) {
-//             return savedTheme;
-//         }
-//         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-//             ? 'dark'
-//             : 'light';
-//     });
-
-//     useEffect(() => {
-//         const root = window.document.documentElement;
-        
-//         root.classList.remove(theme === 'light' ? 'dark' : 'light');
-//         root.classList.add(theme);
-        
-//         window.localStorage.setItem('theme', theme);
-//     }, [theme]);
-
-//     const toggleTheme = useCallback(() => {
-//         setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-//     }, []);
-
-//     const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
-
-//     return (
-//         <ThemeContext.Provider value={value}>
-//             {children}
-//         </ThemeContext.Provider>
-//     );
-// };
-
-// const useTheme = () => {
-//     const context = useContext(ThemeContext);
-//     if (!context) {
-//         throw new Error('useTheme must be used within a ThemeProvider');
-//     }
-//     return context;
-// };
-
 const loadScript = (src) => {
     return new Promise((resolve, reject) => {
         if (document.querySelector(`script[src="${src}"]`)) {
@@ -251,25 +205,43 @@ const csvParserService = {
     }
 };
 
+// Kembalikan ke kode yang aman ini
 const geminiService = {
     getAnalysis: async (prompt) => {
         try {
-            const apiKey = "";
+            // 1. Baca API key dari environment variable Vite
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            
+            if (!apiKey) {
+                throw new Error("API Key Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_KEY sudah diatur.");
+            }
+            
             const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
             const payload = { contents: chatHistory };
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            // 2. Baca URL API dari environment variable Vite
+            const baseUrl = import.meta.env.VITE_GEMINI_API_URL;
+            const apiUrl = `${baseUrl}?key=${apiKey}`;
+
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+            
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error("API Error Body:", errorBody);
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+            
             const result = await response.json();
+            
             if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
                 return result.candidates[0].content.parts[0].text;
             } else {
                 console.error("Invalid API response structure:", result);
-                throw new Error("Struktur respons dari API tidak valid atau tidak berisi teks.");
+                throw new Error("Struktur respons dari API tidak valid.");
             }
         } catch (error) {
             console.error("Gemini API Error:", error);
-            throw new Error(`Terjadi kesalahan saat mengambil analisis AI: ${error.message}. Mohon coba lagi.`);
+            return `**Terjadi Kesalahan pada Analisis AI:**\n\n${error.message}\n\n*Pastikan API Key sudah benar dan memiliki kuota.*`;
         }
     }
 };
@@ -474,13 +446,16 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
     const handleFileInputChange = useCallback((e) => { if (e.target.files && e.target.files.length > 0) { onFileSelect(e.target.files[0]); e.target.value = null; } }, [onFileSelect]);
 
     return (
-        <div className="container mx-auto px-4 py-16 flex flex-col items-center justify-center min-h-screen text-slate-800 dark:text-slate-200 transition-colors duration-300 overflow-y-auto">
-            <div className="text-center mb-12">
-                <FileText className="w-16 h-16 mx-auto text-sky-600 dark:text-sky-400 mb-4" />
-                <h1 className="text-4xl md:text-5xl font-bold text-sky-900 dark:text-white mb-6">Dashboard Analisis</h1>
-                <h2 className="text-2xl md:text-3xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
+        <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-screen text-slate-800 dark:text-slate-200 transition-colors duration-300">
+            <div className="text-center mb-10">
+                <h1 className="text-3xl md:text-4xl font-bold text-sky-900 dark:text-white mb-4 flex items-center justify-center gap-3">
+                    <FileText className="w-9 h-9 md:w-10 md:h-10 text-sky-600 dark:text-sky-400" />
+                    <span>Dashboard Analisis</span>
+                </h1>
+                <h2 className="text-xl md:text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
                 <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">Unggah file CSV Anda untuk mendapatkan wawasan mendalam dan analisis AI tentang pola kehadiran tim Anda.</p>
             </div>
+            
             <div className="max-w-2xl w-full mx-auto">
                 {!scriptsLoaded ? (
                     <div className="text-center">
@@ -518,7 +493,7 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
             </div>
             
             <motion.div 
-                className="mt-20 max-w-4xl w-full text-center"
+                className="mt-12 max-w-4xl w-full text-center"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
@@ -530,14 +505,14 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
                             <Sparkles className="w-8 h-8 text-orange-500 dark:text-orange-400" />
                         </div>
                         <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Analisis AI Mendalam</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Dapatkan wawasan dan rekomendasi yang dapat ditindaklanjuti secara otomatis dari data Anda.</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Dapatkan wawasan dan rekomendasi yang mendalam berdasarkan data yang diinput.</p>
                     </div>
                     <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                         <div className="p-3 bg-sky-100 dark:bg-sky-900/50 rounded-full mb-4">
                             <BarChart2 className="w-8 h-8 text-sky-500 dark:text-sky-400" />
                         </div>
                         <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Visualisasi Interaktif</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Jelajahi data kehadiran melalui grafik dan bagan yang dinamis dan mudah dipahami.</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Visualisasi data kehadiran melalui grafik dan bagan yang dinamis dan mudah dipahami.</p>
                     </div>
                     <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                         <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-full mb-4">
@@ -1191,22 +1166,11 @@ const AnalyticsPage = ({ data }) => {
     const aggregatedData = useMemo(() => {
         const employeeMap = new Map();
         data.forEach(row => {
-            const name = row.NAMA;
-            if (!name) return;
-
-            if (!employeeMap.has(name)) {
-                employeeMap.set(name, {
-                    NAMA: name,
-                    DIVISI: row.DIVISI || 'N/A',
-                    JABATAN: row.JABATAN || 'N/A',
-                    HARI_KERJA: 0,
-                    TERLAMBAT: 0,
-                    SURAT_DOKTER: 0,
-                    IJIN_FULL: 0,
-                    CUTI: 0,
-                });
+            if (!row.NAMA) return;
+            if (!employeeMap.has(row.NAMA)) {
+                employeeMap.set(row.NAMA, { NAMA: row.NAMA, DIVISI: row.DIVISI || 'N/A', JABATAN: row.JABATAN || 'N/A', HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0 });
             }
-            const stats = employeeMap.get(name);
+            const stats = employeeMap.get(row.NAMA);
             stats.HARI_KERJA += row.HARI_KERJA || 0;
             stats.TERLAMBAT += row.TERLAMBAT || 0;
             stats.SURAT_DOKTER += row.SURAT_DOKTER || 0;
@@ -1251,7 +1215,7 @@ const AnalyticsPage = ({ data }) => {
             .sort((a, b) => b.score - a.score)
             .slice(0, 5);
     }, [aggregatedData]);
-
+    
     const monthlyTrendData = useMemo(() => {
         const monthlyStats = {};
         data.forEach(row => {
@@ -1280,31 +1244,182 @@ const AnalyticsPage = ({ data }) => {
 
     const handleExport = () => {
         const dataToExport = [
-            ...Object.values(analyticsData).map(div => ({ 'Divisi': div.name, 'Skor Performa': div.avgPerformance.toFixed(1), 'Jumlah Karyawan': div.employees.length, 'Rata-rata Terlambat': (div.employees.length > 0 ? (div.totalTardiness / div.employees.length) : 0).toFixed(1) })),
-            {}, // Empty row for separation
+            { 'Analisis Performa Divisi': '' },
+            ...Object.values(analyticsData).map(div => ({ 
+                'Divisi': div.name, 
+                'Skor Performa': div.avgPerformance.toFixed(1), 
+                'Jumlah Karyawan': div.employees.length, 
+                'Rata-rata Terlambat': (div.employees.length > 0 ? (div.totalTardiness / div.employees.length) : 0).toFixed(1) 
+            })),
+            {}, 
             { 'Top 5 Karyawan Terbaik': '' },
-            ...topPerformers.map(emp => ({ 'Nama': emp.NAMA, 'Divisi': emp.DIVISI, 'Skor Performa': emp.score.toFixed(1) }))
+            ...topPerformers.map(emp => ({ 
+                'Nama': emp.NAMA, 
+                'Divisi': emp.DIVISI, 
+                'Skor Performa': emp.score.toFixed(1) 
+            }))
         ];
         exportService.exportToCsv(dataToExport, 'analisis_insight.csv');
     };
 
-    return (<motion.div
-        className="space-y-8 printable-content"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
-    >
-        <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 text-white flex justify-between items-center"><div className="flex-grow"><div className="flex items-center gap-3 mb-4"><TrendingUp className="w-8 h-8" /><h2 className="text-3xl font-bold">Analisis & Wawasan</h2></div><p className="text-sky-100 text-lg">Analisis mendalam performa kehadiran dan produktivitas tim</p></div><button onClick={handleExport} className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors no-print"><Download size={16} /> Ekspor</button></div>
-        
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-            <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Tren Kehadiran per Bulan</h3>
-            <div className="h-80">
-                <ChartWrapper chartId="monthly-trend-chart" type="line" data={monthlyTrendData} options={monthlyChartOptions} fallbackText={{ icon: <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Data tidak cukup untuk menampilkan tren bulanan." }} />
+    const metrics = [
+        { key: 'performance', icon: <Award className="w-4 h-4" />, text: 'Performa Divisi' },
+        { key: 'trends', icon: <TrendingUp className="w-4 h-4" />, text: 'Tren & Pola' },
+        { key: 'risks', icon: <AlertTriangle className="w-4 h-4" />, text: 'Identifikasi Risiko' }
+    ];
+
+    const PerformanceContent = (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Skor Kinerja per Divisi</h3>
+                <div className="space-y-4">
+                    {Object.values(analyticsData).map(div => (
+                        <div key={div.name} className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{div.name}</span>
+                                <span className="text-lg font-bold text-sky-700 dark:text-sky-400">{div.avgPerformance.toFixed(1)}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2">
+                                <div className="bg-gradient-to-r from-sky-500 to-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${div.avgPerformance}%` }}></div>
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{div.employees.length} karyawan • Rata-rata Terlambat: {(div.employees.length > 0 ? (div.totalTardiness / div.employees.length) : 0).toFixed(1)}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">5 Karyawan Terbaik</h3>
+                <div className="space-y-3">
+                    {topPerformers.map((emp, index) => (
+                        <div key={emp.NAMA} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-600' : 'bg-sky-600'}`}>{index + 1}</div>
+                                <div>
+                                    <p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI}</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-lg font-bold text-sky-700 dark:text-sky-400">{emp.score.toFixed(1)}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Skor Kinerja</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
+    );
 
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300"><div className="flex flex-wrap gap-4 mb-6 no-print"><button onClick={() => setSelectedMetric('performance')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'performance' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><Award className="w-4 h-4" /> Performa Divisi</button><button onClick={() => setSelectedMetric('trends')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'trends' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><TrendingUp className="w-4 h-4" /> Tren & Pola</button><button onClick={() => setSelectedMetric('risks')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${selectedMetric === 'risks' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}><AlertTriangle className="w-4 h-4" /> Identifikasi Risiko</button></div>{selectedMetric === 'performance' && (<div className="grid grid-cols-1 lg:grid-cols-2 gap-8"><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Skor Kinerja per Divisi</h3><div className="space-y-4">{Object.values(analyticsData).map(div => (<div key={div.name} className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg"><div className="flex justify-between items-center mb-2"><span className="font-medium text-gray-800 dark:text-gray-200">{div.name}</span><span className="text-lg font-bold text-sky-700 dark:text-sky-400">{div.avgPerformance.toFixed(1)}</span></div><div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2"><div className="bg-gradient-to-r from-sky-500 to-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${div.avgPerformance}%` }}></div></div><div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{div.employees.length} karyawan • Rata-rata Terlambat: {div.employees.length > 0 ? (div.totalTardiness / div.employees.length).toFixed(1) : 0}</div></div>))}</div></div><div><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">5 Karyawan Terbaik</h3><div className="space-y-3">{topPerformers.map((emp, index) => (<div key={emp.NAMA} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-600' : 'bg-sky-600'}`}>{index + 1}</div><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI}</p></div></div><div className="text-right"><p className="text-lg font-bold text-sky-700 dark:text-sky-400">{emp.score.toFixed(1)}</p><p className="text-xs text-gray-500 dark:text-gray-400">Skor Kinerja</p></div></div>))}</div></div></div>)}{selectedMetric === 'trends' && (<div className="space-y-6"><div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Analisis Tren Kehadiran</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="text-center"><div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.TERLAMBAT, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Terlambat/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-red-600 dark:text-red-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.SURAT_DOKTER + emp.IJIN_FULL, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Absen/Karyawan</div></div><div className="text-center"><div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{aggregatedData.length > 0 ? ((aggregatedData.reduce((sum, emp) => sum + emp.CUTI, 0) / aggregatedData.length)).toFixed(1) : 0}</div><div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Cuti/Karyawan</div></div></div></div></div>)}{selectedMetric === 'risks' && (<div className="space-y-6"><div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 p-6 rounded-lg"><h3 className="text-xl font-semibold mb-4 text-red-800 dark:text-red-300 flex items-center"><AlertTriangle className="w-5 h-5 mr-2" /> Karyawan Berisiko Tinggi</h3><div className="space-y-3">{aggregatedData.filter(emp => emp.TERLAMBAT > 5 || (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3).slice(0, 5).map(emp => (<div key={emp.NAMA} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-red-200 dark:border-red-800/50"><div className="flex justify-between items-center"><div><p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p><p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI} - {emp.JABATAN}</p></div><div className="text-right"><p className="text-sm text-red-600 dark:text-red-400">{emp.TERLAMBAT > 5 && `Terlambat: ${emp.TERLAMBAT}x`}{emp.TERLAMBAT > 5 && (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && ' • '}{(emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && `Absen: ${emp.SURAT_DOKTER + emp.IJIN_FULL} hari`}</p></div></div></div>))}</div></div></div>)}</div></motion.div>);
+    const TrendsContent = (
+        <div className="space-y-6">
+            <div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300 flex items-center">
+                    <TrendingUp className="w-5 h-5 mr-2" /> Analisis Tren Kehadiran
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                            {aggregatedData.length > 0 ? (aggregatedData.reduce((sum, emp) => sum + emp.TERLAMBAT, 0) / aggregatedData.length).toFixed(1) : 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Terlambat (jam) / Karyawan</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                            {aggregatedData.length > 0 ? (aggregatedData.reduce((sum, emp) => sum + emp.SURAT_DOKTER + emp.IJIN_FULL, 0) / aggregatedData.length).toFixed(1) : 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Absen (hari) / Karyawan</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {aggregatedData.length > 0 ? (aggregatedData.reduce((sum, emp) => sum + emp.CUTI, 0) / aggregatedData.length).toFixed(1) : 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Rata-rata Cuti (hari) / Karyawan</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+    
+    const RisksContent = (
+        <div className="space-y-6">
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold mb-4 text-red-800 dark:text-red-300 flex items-center">
+                    <AlertTriangle className="w-5 h-5 mr-2" /> Karyawan Berisiko Tinggi
+                </h3>
+                <div className="space-y-3">
+                    {aggregatedData.filter(emp => emp.TERLAMBAT > 5 || (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3).slice(0, 5).map(emp => (
+                        <div key={emp.NAMA} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-red-200 dark:border-red-800/50">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="font-medium text-gray-800 dark:text-gray-200">{emp.NAMA}</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">{emp.DIVISI} - {emp.JABATAN}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                        {emp.TERLAMBAT > 5 && `Terlambat: ${emp.TERLAMBAT}x`}
+                                        {emp.TERLAMBAT > 5 && (emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && ' • '}
+                                        {(emp.SURAT_DOKTER + emp.IJIN_FULL) > 3 && `Absen: ${emp.SURAT_DOKTER + emp.IJIN_FULL} hari`}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <motion.div
+            className="space-y-8 printable-content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+        >
+            <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 text-white flex justify-between items-center">
+                <div className="flex-grow">
+                    <div className="flex items-center gap-3 mb-4">
+                        <TrendingUp className="w-8 h-8" />
+                        <h2 className="text-3xl font-bold">Analisis & Wawasan</h2>
+                    </div>
+                    <p className="text-sky-100 text-lg">Analisis mendalam performa kehadiran dan produktivitas tim</p>
+                </div>
+                <button onClick={handleExport} className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors no-print">
+                    <Download size={16} /> Ekspor
+                </button>
+            </div>
+            
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
+                <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Tren Kehadiran per Bulan</h3>
+                <div className="h-80">
+                    <ChartWrapper chartId="monthly-trend-chart" type="line" data={monthlyTrendData} options={monthlyChartOptions} fallbackText={{ icon: <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-50" />, text: "Data tidak cukup untuk menampilkan tren bulanan." }} />
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
+                <div className="flex flex-wrap gap-4 mb-6 no-print">
+                    {metrics.map(metric => (
+                        <button
+                            key={metric.key}
+                            onClick={() => setSelectedMetric(metric.key)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                selectedMetric === metric.key
+                                    ? 'bg-sky-600 text-white shadow-md'
+                                    : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'
+                            }`}
+                        >
+                            {metric.icon} {metric.text}
+                        </button>
+                    ))}
+                </div>
+                
+                {selectedMetric === 'performance' && PerformanceContent}
+                {selectedMetric === 'trends' && TrendsContent}
+                {selectedMetric === 'risks' && RisksContent}
+            </div>
+        </motion.div>
+    );
 };
 
 const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAiLoading }) => {
@@ -1315,44 +1430,59 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
 
     const getStats = useCallback((year, month) => {
         let filteredData = data;
-        if (year !== 'semua') {
+        if (year && year !== 'semua') {
             filteredData = filteredData.filter(row => row.TAHUN === year);
         }
-        if (month !== 'semua') {
+        if (month && month !== 'semua') {
             filteredData = filteredData.filter(row => row.BULAN === month);
         }
         
         return {
             tardiness: filteredData.reduce((sum, row) => sum + row.TERLAMBAT, 0),
-            absence: filteredData.reduce((sum, row) => sum + row.SURAT_DOKTER + row.IJIN_FULL, 0),
-            workDays: filteredData.reduce((sum, row) => sum + row.HARI_KERJA, 0),
-            employees: new Set(filteredData.map(row => row.NAMA)).size
+            totalAbsen: filteredData.reduce((sum, row) => sum + row.SURAT_DOKTER + row.IJIN_FULL, 0),
+            totalCuti: filteredData.reduce((sum, row) => sum + row.CUTI, 0),
+            employees: new Set(filteredData.map(row => row.NAMA)).size,
         };
     }, [data]);
 
     const statsA = useMemo(() => yearA && monthA ? getStats(yearA, monthA) : null, [yearA, monthA, getStats]);
     const statsB = useMemo(() => yearB && monthB ? getStats(yearB, monthB) : null, [yearB, monthB, getStats]);
 
-    const getChangeIcon = (valueA, valueB) => {
+    const getChangeIcon = (valueA, valueB, isGoodWhenLower = true) => {
         if (valueA === valueB) return <Minus className="w-4 h-4 text-gray-500" />;
-        return valueA < valueB ? <ArrowUp className="w-4 h-4 text-red-500" /> : <ArrowDown className="w-4 h-4 text-green-500" />;
+        const isBetter = isGoodWhenLower ? valueB < valueA : valueB > valueA;
+        return isBetter ? <ArrowDown className="w-4 h-4 text-green-500" /> : <ArrowUp className="w-4 h-4 text-red-500" />;
     };
 
     const getChangeColor = (valueA, valueB, isGoodWhenLower = true) => {
         if (valueA === valueB) return "text-gray-500 dark:text-gray-400";
-        const isIncreasing = valueB > valueA;
-        if (isGoodWhenLower) {
-            return isIncreasing ? "text-red-500 dark:text-red-400" : "text-green-500 dark:text-green-400";
-        } else {
-            return isIncreasing ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400";
-        }
+        const isBetter = isGoodWhenLower ? valueB < valueA : valueB > valueA;
+        return isBetter ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400";
     };
 
     const handleAnalyze = () => {
         if (!statsA || !statsB) return;
         const periodAString = `${monthA} ${yearA}`;
         const periodBString = `${monthB} ${yearB}`;
-        onAnalyze({ periodA: periodAString, periodB: periodBString, statsA, statsB });
+        
+        // Prompt ini sekarang menjadi bagian dari handleAnalyze
+        const promptData = {
+            periodA: periodAString,
+            periodB: periodBString,
+            statsA: {
+                tardiness: statsA.tardiness,
+                totalAbsen: statsA.totalAbsen,
+                totalCuti: statsA.totalCuti,
+                employees: statsA.employees,
+            },
+            statsB: {
+                tardiness: statsB.tardiness,
+                totalAbsen: statsB.totalAbsen,
+                totalCuti: statsB.totalCuti,
+                employees: statsB.employees,
+            }
+        };
+        onAnalyze(promptData); // Mengirim objek ke fungsi onAnalyze
     };
 
     return (
@@ -1371,28 +1501,27 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                 <p className="text-sky-100 text-lg">Bandingkan data kehadiran antara dua periode untuk mengidentifikasi tren dan perubahan</p>
             </div>
 
-            {/* Period Selection */}
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm no-print transition-colors duration-300">
                 <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Pilih Periode untuk Dibandingkan</h3>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tahun A</label>
-                            <AnimatedDropdown options={availableYears} selectedValue={yearA} onValueChange={setYearA} placeholder="Pilih tahun..." includeAllOption={true} />
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tahun A</label>
+                            <AnimatedDropdown options={availableYears} selectedValue={yearA} onValueChange={setYearA} placeholder="Pilih tahun..." />
                         </div>
                         <div>
-                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Bulan A</label>
-                            <AnimatedDropdown options={availableMonths} selectedValue={monthA} onValueChange={setMonthA} placeholder="Pilih bulan..." includeAllOption={true}/>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bulan A</label>
+                            <AnimatedDropdown options={availableMonths} selectedValue={monthA} onValueChange={setMonthA} placeholder="Pilih bulan..." />
                         </div>
                     </div>
-                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                    <div className="md:col-span-2 grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tahun B</label>
-                            <AnimatedDropdown options={availableYears} selectedValue={yearB} onValueChange={setYearB} placeholder="Pilih tahun..." includeAllOption={true} />
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tahun B</label>
+                            <AnimatedDropdown options={availableYears} selectedValue={yearB} onValueChange={setYearB} placeholder="Pilih tahun..." />
                         </div>
                         <div>
-                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Bulan B</label>
-                            <AnimatedDropdown options={availableMonths} selectedValue={monthB} onValueChange={setMonthB} placeholder="Pilih bulan..." includeAllOption={true}/>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bulan B</label>
+                            <AnimatedDropdown options={availableMonths} selectedValue={monthB} onValueChange={setMonthB} placeholder="Pilih bulan..." />
                         </div>
                     </div>
                     <button
@@ -1406,24 +1535,22 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                 </div>
             </div>
 
-            {/* Comparison Results */}
             {statsA && statsB && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Period A Stats */}
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode A: {monthA} {yearA}</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode A: {monthA || 'N/A'} {yearA || 'N/A'}</h3>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="text-gray-600 dark:text-gray-400">Total Keterlambatan</span>
                                 <span className="font-bold text-orange-600 dark:text-orange-400">{statsA.tardiness} kali</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                                <span className="text-gray-600 dark:text-gray-400">Total Absensi</span>
-                                <span className="font-bold text-red-600 dark:text-red-400">{statsA.absence} hari</span>
+                                <span className="text-gray-600 dark:text-gray-400">Total Absen (Sakit/Izin)</span>
+                                <span className="font-bold text-red-600 dark:text-red-400">{statsA.totalAbsen} hari</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                                <span className="text-gray-600 dark:text-gray-400">Total Hari Kerja</span>
-                                <span className="font-bold text-green-600 dark:text-green-400">{statsA.workDays} hari</span>
+                                <span className="text-gray-600 dark:text-gray-400">Total Cuti</span>
+                                <span className="font-bold text-blue-600 dark:text-blue-400">{statsA.totalCuti} hari</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="text-gray-600 dark:text-gray-400">Jumlah Karyawan</span>
@@ -1432,9 +1559,8 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                         </div>
                     </div>
 
-                    {/* Period B Stats */}
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm transition-colors duration-300">
-                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode B: {monthB} {yearB}</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-sky-900 dark:text-sky-300">Periode B: {monthB || 'N/A'} {yearB || 'N/A'}</h3>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="text-gray-600 dark:text-gray-400">Total Keterlambatan</span>
@@ -1447,22 +1573,22 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                                 </div>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                                <span className="text-gray-600 dark:text-gray-400">Total Absensi</span>
+                                <span className="text-gray-600 dark:text-gray-400">Total Absen (Sakit/Izin)</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-red-600 dark:text-red-400">{statsB.absence} hari</span>
-                                    {getChangeIcon(statsA.absence, statsB.absence)}
-                                    <span className={`text-sm font-medium ${getChangeColor(statsA.absence, statsB.absence)}`}>
-                                        ({statsB.absence - statsA.absence > 0 ? '+' : ''}{statsB.absence - statsA.absence})
+                                    <span className="font-bold text-red-600 dark:text-red-400">{statsB.totalAbsen} hari</span>
+                                    {getChangeIcon(statsA.totalAbsen, statsB.totalAbsen)}
+                                    <span className={`text-sm font-medium ${getChangeColor(statsA.totalAbsen, statsB.totalAbsen)}`}>
+                                        ({statsB.totalAbsen - statsA.totalAbsen > 0 ? '+' : ''}{statsB.totalAbsen - statsA.totalAbsen})
                                     </span>
                                 </div>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                                <span className="text-gray-600 dark:text-gray-400">Total Hari Kerja</span>
+                                <span className="text-gray-600 dark:text-gray-400">Total Cuti</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-green-600 dark:text-green-400">{statsB.workDays} hari</span>
-                                    {getChangeIcon(statsA.workDays, statsB.workDays)}
-                                    <span className={`text-sm font-medium ${getChangeColor(statsA.workDays, statsB.workDays, false)}`}>
-                                        ({statsB.workDays - statsA.workDays > 0 ? '+' : ''}{statsB.workDays - statsA.workDays})
+                                    <span className="font-bold text-blue-600 dark:text-blue-400">{statsB.totalCuti} hari</span>
+                                    {getChangeIcon(statsA.totalCuti, statsB.totalCuti)}
+                                    <span className={`text-sm font-medium ${getChangeColor(statsA.totalCuti, statsB.totalCuti)}`}>
+                                        ({statsB.totalCuti - statsA.totalCuti > 0 ? '+' : ''}{statsB.totalCuti - statsA.totalCuti})
                                     </span>
                                 </div>
                             </div>
@@ -1470,7 +1596,7 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                                 <span className="text-gray-600 dark:text-gray-400">Jumlah Karyawan</span>
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-sky-600 dark:text-sky-400">{statsB.employees} orang</span>
-                                    {getChangeIcon(statsA.employees, statsB.employees)}
+                                    {getChangeIcon(statsA.employees, statsB.employees, false)}
                                     <span className={`text-sm font-medium ${getChangeColor(statsA.employees, statsB.employees, false)}`}>
                                         ({statsB.employees - statsA.employees > 0 ? '+' : ''}{statsB.employees - statsA.employees})
                                     </span>
@@ -1544,7 +1670,7 @@ const ToolsPage = ({ data, availableEmployees, showError }) => {
                     <BrainCircuit className="w-8 h-8" />
                     <h2 className="text-3xl font-bold">Alat & Prediksi</h2>
                 </div>
-                <p className="text-sky-100 text-lg">Gunakan alat prediktif untuk perencanaan SDM yang lebih baik.</p>
+                <p className="text-sky-100 text-lg">Prediksi Cuti menggunakan model Machine Learning.</p>
             </div>
 
             {/* Prediction Controls */}
@@ -2282,8 +2408,8 @@ const Sidebar = ({ employees, onReset, isSidebarCollapsed, onToggleCollapse, onG
                     whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className={`w-full flex items-center gap-3 py-2.5 px-4 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 ease-in-out bg-gradient-to-r from-sky-500 to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-sky-400 ${
-                        isSidebarCollapsed ? 'justify-center' : 'justify-start'
+                    className={`w-full flex items-center py-2.5 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 ease-in-out bg-gradient-to-r from-sky-500 to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-sky-400 ${
+                        isSidebarCollapsed ? 'justify-center px-3' : 'justify-start px-4 gap-3'
                     }`}
                 >
                     <Printer className="w-5 h-5 flex-shrink-0" />
@@ -2296,8 +2422,8 @@ const Sidebar = ({ employees, onReset, isSidebarCollapsed, onToggleCollapse, onG
                     whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className={`w-full flex items-center gap-3 py-2.5 px-4 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 ease-in-out bg-gradient-to-r from-red-500 to-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-red-400 ${
-                        isSidebarCollapsed ? 'justify-center' : 'justify-start'
+                    className={`w-full flex items-center py-2.5 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 ease-in-out bg-gradient-to-r from-red-500 to-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-red-400 ${
+                        isSidebarCollapsed ? 'justify-center px-3' : 'justify-start px-4 gap-3'
                     }`}
                 >
                     <Upload className="w-5 h-5 flex-shrink-0" />
@@ -2309,35 +2435,6 @@ const Sidebar = ({ employees, onReset, isSidebarCollapsed, onToggleCollapse, onG
         </div>
     );
 };
-
-// const ThemeToggleFAB = () => {
-//     const { theme, toggleTheme } = useTheme();
-
-//     return (
-//         <button
-//             onClick={toggleTheme}
-//             className={`fixed bottom-8 right-8 z-50 p-3 rounded-full shadow-lg hover:scale-110 transition-all duration-300 ${
-//                 theme === 'light' 
-//                 ? 'bg-slate-800' 
-//                 : 'bg-white'
-//             }`}
-//             aria-label="Toggle theme"
-//         >
-//             <AnimatePresence mode="wait" initial={false}>
-//                 <motion.div
-//                     key={theme}
-//                     initial={{ opacity: 0, y: -20 }}
-//                     animate={{ opacity: 1, y: 0 }}
-//                     exit={{ y: 20, opacity: 0 }}
-//                     transition={{ duration: 0.2 }}
-//                 >
-//                     {theme === 'light' ? <Moon className="w-6 h-6 text-white" /> : <Sun className="w-6 h-6 text-yellow-500" />}
-//                 </motion.div>
-//             </AnimatePresence>
-//         </button>
-//     );
-// };
-
 
 const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall, isAiLoading, onAnalyzeComparison, isLoading, showError }) => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -2357,12 +2454,10 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
 
         const { jsPDF } = window.jspdf;
         
-        // Ambil judul halaman secara dinamis untuk nama file
         const pageTitleElement = input.querySelector('h2');
         const pageTitle = pageTitleElement ? pageTitleElement.innerText.trim().replace(/\s+/g, '_') : 'Laporan';
         const fileName = `${pageTitle}-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-        // Sembunyikan elemen yang tidak perlu dicetak (opsional, tapi bagus)
         const elementsToHide = input.querySelectorAll('.no-print');
         elementsToHide.forEach(el => el.style.display = 'none');
 
@@ -2372,11 +2467,10 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
         root.className = 'light'; // Paksa mode terang
 
         html2canvas(input, {
-            scale: 2, // Resolusi lebih tinggi
+            scale: 2, 
             useCORS: true,
             logging: false,
             onclone: (document) => {
-                // Pastikan semua elemen terlihat saat di-clone untuk di-capture
                 const clonedContent = document.querySelector('.print-main');
                 if (clonedContent) {
                     clonedContent.style.height = 'auto';
@@ -2384,13 +2478,12 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
                 }
             }
         }).then(canvas => {
-            // Kembalikan tampilan UI seperti semula setelah proses capture selesai
             elementsToHide.forEach(el => el.style.display = '');
             root.className = originalTheme;
             
             const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 210; // A4 width in mm
-            const pageHeight = 295; // A4 height in mm
+            const imgWidth = 210;
+            const pageHeight = 295;
             const imgHeight = canvas.height * imgWidth / canvas.width;
             let heightLeft = imgHeight;
 
