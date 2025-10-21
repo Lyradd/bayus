@@ -146,10 +146,6 @@ const getMonthNumber = (monthName) => {
 // 1. SERVICES / UTILS
 //================================================================
 
-//================================================================
-// 1. SERVICES / UTILS
-//================================================================
-
 const csvParserService = {
     parse: (file, onComplete, onError) => {
         if (!window.Papa) {
@@ -196,7 +192,7 @@ const csvParserService = {
     },
     // Di dalam const csvParserService
     processRow: (row) => {
-        const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'HARI_KERJA_KOTOR', 'TAHUN_MASUK', 'LAMA_BEKERJA', 'GAJI_POKOK', 'TAHUN', 'CASHBON'];
+        const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'HARI_KERJA_KOTOR', 'TAHUN_MASUK', 'LAMA_BEKERJA', 'GAJI_POKOK', 'TAHUN', 'CASHBON', 'UANG_JABATAN'];
         const processedRow = { ...row };
         
         numericColumns.forEach(col => {
@@ -214,11 +210,9 @@ const csvParserService = {
     }
 };
 
-// Kembalikan ke kode yang aman ini
 const geminiService = {
     getAnalysis: async (prompt) => {
         try {
-            // 1. Baca API key dari environment variable Vite
             const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
             
             if (!apiKey) {
@@ -228,7 +222,6 @@ const geminiService = {
             const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
             const payload = { contents: chatHistory };
             
-            // 2. Baca URL API dari environment variable Vite
             const baseUrl = import.meta.env.VITE_GEMINI_API_URL;
             const apiUrl = `${baseUrl}?key=${apiKey}`;
 
@@ -839,8 +832,9 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
         
         const isMarch = getMonthNumber(selectedMonth) === 3;
         const thr = isMarch ? (employeeData.GAJI_POKOK || 0) : 0;
+        const positionAllowance = employeeData.UANG_JABATAN || 0;
 
-        const totalAllowances = mealAllowance + transportAllowance + incentive + thr;
+        const totalAllowances = mealAllowance + transportAllowance + incentive + thr + positionAllowance;
 
         const lateDeduction = (employeeData.TERLAMBAT || 0) * 5000;
         const permitDeduction = (employeeData.IJIN_FULL || 0) * 10000;
@@ -852,7 +846,7 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
         const finalSalary = grossSalary - totalDeductions;
 
         return {
-            basicSalary, mealAllowance, transportAllowance, incentive, thr, totalAllowances,
+            basicSalary, mealAllowance, transportAllowance, incentive, thr, positionAllowance, totalAllowances,
             grossSalary, lateDeduction, permitDeduction, cashbonDeduction, totalDeductions, finalSalary,
             numberOfMonths
         };
@@ -877,6 +871,10 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
                     <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                         <span className="text-sm text-gray-600 dark:text-gray-400">Gaji Pokok</span>
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.basicSalary)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Tunjangan Jabatan</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{formatCurrency(salaryDetails.positionAllowance)}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                         <div className="flex items-baseline">
@@ -995,6 +993,7 @@ const EmployeeDetailView = ({ params, allData, onAnalyze, isAiLoading }) => {
                 TAHUN_MASUK: baseData.TAHUN_MASUK || 0,
                 LAMA_BEKERJA: baseData.LAMA_BEKERJA || 0,
                 GAJI_POKOK: baseData.GAJI_POKOK || 0,
+                UANG_JABATAN: latestRecord.UANG_JABATAN || 0,
                 HARI_KERJA: 0, TERLAMBAT: 0, SURAT_DOKTER: 0, IJIN_FULL: 0, CUTI: 0,
                 SISA_CUTI: baseData.SISA_CUTI || 0,
                 CASHBON: baseData.CASHBON || 0,
@@ -1011,6 +1010,9 @@ const EmployeeDetailView = ({ params, allData, onAnalyze, isAiLoading }) => {
             acc.IJIN_FULL += row.IJIN_FULL;
             acc.CUTI += row.CUTI;
             acc.CASHBON += row.CASHBON || 0;
+            if (row.UANG_JABATAN) {
+                acc.UANG_JABATAN = row.UANG_JABATAN;
+            }
             return acc;
         }, { 
             NAMA: employeeName,
@@ -1791,16 +1793,16 @@ const SortIndicator = ({ columnKey, sortConfig }) => {
 };
 
 const PayrollPage = ({ data, availableYears, availableMonths }) => {
-    const [selectedYear, setSelectedYear] = useState(availableYears[0] || 'semua');
-    const [selectedMonth, setSelectedMonth] = useState('semua');
+    const [selectedYear, setSelectedYear] = useState(availableYears[0] || '');
+    const [selectedMonth, setSelectedMonth] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'NAMA', direction: 'ascending' });
 
     const payrollData = useMemo(() => {
         let filteredData = data;
-        if (selectedYear !== 'semua') {
+        if (selectedYear && selectedYear !== 'semua') {
             filteredData = filteredData.filter(row => row.TAHUN === selectedYear);
         }
-        if (selectedMonth !== 'semua') {
+        if (selectedMonth && selectedMonth !== 'semua') {
             filteredData = filteredData.filter(row => row.BULAN === selectedMonth);
         }
 
@@ -1811,6 +1813,7 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                     NAMA: name,
                     DIVISI: row.DIVISI || 'N/A',
                     GAJI_POKOK: row.GAJI_POKOK || 0,
+                    UANG_JABATAN: row.UANG_JABATAN || 0,
                     HARI_KERJA: 0,
                     TERLAMBAT: 0,
                     IJIN_FULL: 0,
@@ -1822,6 +1825,9 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             stats.TERLAMBAT += row.TERLAMBAT || 0;
             stats.IJIN_FULL += row.IJIN_FULL || 0;
             stats.CASHBON += row.CASHBON || 0;
+            if (row.UANG_JABATAN) {
+                stats.UANG_JABATAN = row.UANG_JABATAN;
+            }
             return map;
         }, new Map()).values());
 
@@ -1831,7 +1837,9 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             const incentive = emp.HARI_KERJA > 0 ? 100000 : 0;
             const isMarch = getMonthNumber(selectedMonth) === 3;
             const thr = isMarch ? emp.GAJI_POKOK : 0;
-            const totalAllowances = mealAllowance + transportAllowance + incentive + thr;
+            const positionAllowance = emp.UANG_JABATAN || 0;
+            
+            const totalAllowances = mealAllowance + transportAllowance + incentive + thr + positionAllowance;
             const grossSalary = emp.GAJI_POKOK + totalAllowances;
             
             const lateDeduction = emp.TERLAMBAT * 5000;
@@ -1843,15 +1851,10 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             
             return {
                 ...emp,
-                mealAllowance,
-                transportAllowance,
-                incentive,
-                thr,
+                positionAllowance,
                 totalAllowances,
+                thr,
                 grossSalary,
-                lateDeduction,
-                permitDeduction,
-                cashbonDeduction,
                 totalDeductions,
                 netSalary
             };
@@ -1885,6 +1888,7 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
     const totals = useMemo(() => {
         return payrollData.reduce((acc, curr) => {
             acc.totalPokok += curr.GAJI_POKOK;
+            acc.totalPositionAllowance += curr.positionAllowance;
             acc.totalTunjangan += curr.totalAllowances;
             acc.totalPendapatan += curr.grossSalary;
             acc.totalPotongan += curr.totalDeductions;
@@ -1892,6 +1896,7 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             return acc;
         }, {
             totalPokok: 0,
+            totalPositionAllowance: 0,
             totalTunjangan: 0,
             totalPendapatan: 0,
             totalPotongan: 0,
@@ -1906,13 +1911,14 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             'Nama Karyawan': emp.NAMA,
             'Divisi': emp.DIVISI,
             'Gaji Pokok': emp.GAJI_POKOK,
-            'Tunjangan': emp.totalAllowances,
+            'Tunjangan Jabatan': emp.positionAllowance,
+            'Tunjangan Lain': emp.totalAllowances - emp.thr - emp.positionAllowance,
             'THR': emp.thr,
             'Total Pendapatan': emp.grossSalary,
             'Total Potongan': emp.totalDeductions,
             'Gaji Bersih': emp.netSalary
         }));
-        exportService.exportToCsv(dataToExport, `ringkasan_gaji_${selectedMonth}_${selectedYear}.csv`);
+        exportService.exportToCsv(dataToExport, `ringkasan_gaji_${selectedMonth || 'semua'}_${selectedYear || 'semua'}.csv`);
     };
 
     return (
@@ -1929,7 +1935,7 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                         <h2 className="text-3xl font-bold text-sky-900 dark:text-white flex items-center gap-3">
                             <DollarSign /> Ringkasan Gaji Karyawan
                         </h2>
-                         <p className="text-lg text-gray-600 dark:text-gray-400">Ringkasan penggajian berdasarkan periode yang dipilih.</p>
+                        <p className="text-lg text-gray-600 dark:text-gray-400">Ringkasan penggajian berdasarkan periode yang dipilih.</p>
                     </div>
                     <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4 no-print">
                         <div className="w-full sm:w-40">
@@ -1938,14 +1944,14 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                         <div className="w-full sm:w-40">
                             <AnimatedDropdown options={availableMonths} selectedValue={selectedMonth} onValueChange={setSelectedMonth} placeholder="Semua Bulan" includeAllOption={true} />
                         </div>
-                         <button onClick={handleExport} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                        <button onClick={handleExport} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
                             <Download size={16} /> Ekspor
                         </button>
                     </div>
                 </div>
             </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <KpiCard icon={<DollarSign />} title="Total Gaji Dibayarkan" value={formatCurrency(totals.totalBersih)} colorClass={{ bg: 'bg-green-100 dark:bg-green-900/50', text: 'text-green-600 dark:text-green-400' }} />
                 <KpiCard icon={<TrendingUp />} title="Total Tunjangan & THR" value={formatCurrency(totals.totalTunjangan)} colorClass={{ bg: 'bg-sky-100 dark:bg-sky-900/50', text: 'text-sky-600 dark:text-sky-400' }} />
                 <KpiCard icon={<TrendingDown />} title="Total Potongan" value={formatCurrency(totals.totalPotongan)} colorClass={{ bg: 'bg-orange-100 dark:bg-orange-900/50', text: 'text-orange-600 dark:text-orange-400' }} />
@@ -1953,37 +1959,35 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
 
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">    
-                    <thead className="bg-gray-50 dark:bg-slate-700/50">
-                        <tr className="border-b-2 border-gray-200 dark:border-slate-700">
-                            
-                            <th 
-                                className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600/50 transition-colors group"
-                                onClick={() => requestSort('NAMA')}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span>Nama Karyawan</span>
-                                    <SortIndicator columnKey="NAMA" sortConfig={sortConfig} />
-                                </div>
-                            </th>
-
-                            <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Gaji Pokok</th>
-                            <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Tunjangan</th>
-                            <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">THR</th>
-                            <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Total Pendapatan</th>
-                            <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Total Potongan</th>
-
-                            <th 
-                                className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600/50 transition-colors group"
-                                onClick={() => requestSort('netSalary')}
-                            >
-                                <div className="flex items-center justify-end gap-2">
-                                    <span>Gaji Bersih</span>
-                                    <SortIndicator columnKey="netSalary" sortConfig={sortConfig} />
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50 dark:bg-slate-700/50">
+                            <tr className="border-b-2 border-gray-200 dark:border-slate-700">
+                                <th 
+                                    className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600/50 transition-colors group"
+                                    onClick={() => requestSort('NAMA')}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span>Nama Karyawan</span>
+                                        <SortIndicator columnKey="NAMA" sortConfig={sortConfig} />
+                                    </div>
+                                </th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Gaji Pokok</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Tj. Jabatan</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Tunjangan Lain</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">THR</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Total Pendapatan</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Total Potongan</th>
+                                <th 
+                                    className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600/50 transition-colors group"
+                                    onClick={() => requestSort('netSalary')}
+                                >
+                                    <div className="flex items-center justify-end gap-2">
+                                        <span>Gaji Bersih</span>
+                                        <SortIndicator columnKey="netSalary" sortConfig={sortConfig} />
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {sortedPayrollData.map(employee => (
                                 <tr key={employee.NAMA} className="border-b border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800/50">
@@ -1992,7 +1996,8 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                                         <div className="text-xs text-gray-500">{employee.DIVISI}</div>
                                     </td>
                                     <td className="p-4 text-right text-gray-700 dark:text-gray-300">{formatCurrency(employee.GAJI_POKOK)}</td>
-                                    <td className="p-4 text-right text-gray-700 dark:text-gray-300">{formatCurrency(employee.totalAllowances - employee.thr)}</td>
+                                    <td className="p-4 text-right text-gray-700 dark:text-gray-300">{formatCurrency(employee.positionAllowance)}</td>
+                                    <td className="p-4 text-right text-gray-700 dark:text-gray-300">{formatCurrency(employee.totalAllowances - employee.thr - employee.positionAllowance)}</td>
                                     <td className="p-4 text-right text-gray-700 dark:text-gray-300">{formatCurrency(employee.thr)}</td>
                                     <td className="p-4 text-right font-semibold text-sky-700 dark:text-sky-400">{formatCurrency(employee.grossSalary)}</td>
                                     <td className="p-4 text-right text-orange-600 dark:text-orange-400">(-) {formatCurrency(employee.totalDeductions)}</td>
@@ -2004,7 +2009,8 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                             <tr className="font-bold text-gray-800 dark:text-gray-200">
                                 <td className="p-4">Total</td>
                                 <td className="p-4 text-right">{formatCurrency(totals.totalPokok)}</td>
-                                <td className="p-4 text-right">{formatCurrency(totals.totalTunjangan)}</td>
+                                <td className="p-4 text-right">{formatCurrency(totals.totalPositionAllowance)}</td>
+                                <td className="p-4 text-right">{formatCurrency(totals.totalTunjangan - totals.totalPositionAllowance)}</td>
                                 <td className="p-4 text-right"></td>
                                 <td className="p-4 text-right">{formatCurrency(totals.totalPendapatan)}</td>
                                 <td className="p-4 text-right">(-) {formatCurrency(totals.totalPotongan)}</td>
@@ -2014,10 +2020,10 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                     </table>
                 </div>
             </div>
-
         </motion.div>
     );
 };
+
 
 const OverallDashboard = ({ data, onAnalyzeIndividual, onAnalyzeOverall, isAiLoading }) => {
     const [selectedYear, setSelectedYear] = useState('semua');
