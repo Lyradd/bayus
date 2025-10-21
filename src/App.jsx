@@ -1972,7 +1972,7 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
                                     </div>
                                 </th>
                                 <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Gaji Pokok</th>
-                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Tj. Jabatan</th>
+                                <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Uang Jabatan</th>
                                 <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Tunjangan Lain</th>
                                 <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">THR</th>
                                 <th className="p-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-right">Total Pendapatan</th>
