@@ -190,7 +190,6 @@ const csvParserService = {
             error: (error) => onError(new Error(`Terjadi kesalahan saat membaca file CSV: ${error.message}`)),
         });
     },
-    // Di dalam const csvParserService
     processRow: (row) => {
         const numericColumns = ['SURAT_DOKTER', 'IJIN_FULL', 'TERLAMBAT', 'CUTI', 'SISA_CUTI', 'HARI_KERJA', 'HARI_KERJA_KOTOR', 'TAHUN_MASUK', 'LAMA_BEKERJA', 'GAJI_POKOK', 'TAHUN', 'CASHBON', 'UANG_JABATAN'];
         const processedRow = { ...row };
@@ -215,22 +214,39 @@ const geminiService = {
         try {
             const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
             
+            if (!apiKey || apiKey === "AIzaSyBfrVB3nW3AAMnW8ABezf9LILxkITB_cxE") {
+                 console.warn("PERINGATAN: Kunci API masih di-hardcode di dalam cek keamanan!");
+            }
             if (!apiKey) {
-                throw new Error("API Key Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_KEY sudah diatur.");
+                return `**Terjadi Kesalahan pada Analisis AI:**\n\nAPI Key Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_KEY sudah diatur di file .env.`;
             }
             
             const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
             const payload = { contents: chatHistory };
             
             const baseUrl = import.meta.env.VITE_GEMINI_API_URL;
+            
+            if (!baseUrl) {
+                 return `**Terjadi Kesalahan pada Analisis AI:**\n\nURL API Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_URL sudah diatur di file .env.`;
+            }
+
             const apiUrl = `${baseUrl}?key=${apiKey}`;
+            
+            console.log("Mencoba menghubungi API:", apiUrl);
 
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             
             if (!response.ok) {
                 const errorBody = await response.text();
                 console.error("API Error Body:", errorBody);
-                throw new Error(`API call failed with status: ${response.status}`);
+                // Memberikan pesan error yang lebih jelas
+                let errorMsg = `Panggilan API gagal dengan status: ${response.status}.`;
+                if (response.status === 429) {
+                    errorMsg += " Anda telah melebihi kuota. Coba lagi dalam satu menit.";
+                } else if (response.status === 400) {
+                    errorMsg += " Permintaan tidak valid, cek model API atau prompt Anda.";
+                }
+                throw new Error(errorMsg);
             }
             
             const result = await response.json();
@@ -448,83 +464,88 @@ const FileUploadScreen = ({ onFileSelect, isLoading, scriptsLoaded }) => {
     const handleFileInputChange = useCallback((e) => { if (e.target.files && e.target.files.length > 0) { onFileSelect(e.target.files[0]); e.target.value = null; } }, [onFileSelect]);
 
     return (
-        <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-screen text-slate-800 dark:text-slate-200 transition-colors duration-300">
-            <div className="text-center mb-10">
-                <h1 className="text-3xl md:text-4xl font-bold text-sky-900 dark:text-white mb-4 flex items-center justify-center gap-3">
-                    <FileText className="w-9 h-9 md:w-10 md:h-10 text-sky-600 dark:text-sky-400" />
-                    <span>Dashboard Analisis</span>
-                </h1>
-                <h2 className="text-xl md:text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
-                <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">Unggah file CSV Anda untuk mendapatkan wawasan mendalam dan analisis AI tentang pola kehadiran tim Anda.</p>
-            </div>
             
-            <div className="max-w-2xl w-full mx-auto">
-                {!scriptsLoaded ? (
-                    <div className="text-center">
-                        <div className="inline-flex items-center px-6 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full shadow-sm">
-                            <RefreshCw className="w-5 h-5 mr-3 animate-spin text-sky-600 dark:text-sky-400" />
-                            <span className="text-gray-600 dark:text-gray-300">Mempersiapkan aplikasi...</span>
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer group ${dragOver ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-sky-600 dark:hover:border-sky-400 hover:bg-white dark:hover:bg-slate-800'}`}
-                        onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
-                        onClick={() => document.getElementById('file-input')?.click()}
-                    >
-                        <input type="file" id="file-input" className="hidden" accept=".csv" onChange={handleFileInputChange} disabled={!scriptsLoaded} />
-                        <div className="flex flex-col items-center">
-                            <div className={`p-3 rounded-full mb-4 transition-all duration-300 ${dragOver ? 'bg-sky-100 dark:bg-sky-900 scale-110' : 'bg-gray-100 dark:bg-slate-700 group-hover:bg-sky-100 dark:group-hover:bg-sky-900'}`}>
-                                <Upload className={`w-10 h-10 transition-colors duration-300 ${dragOver ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-sky-600 dark:group-hover:text-sky-400'}`} />
-                            </div>
-                            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{dragOver ? 'Lepaskan file di sini' : 'Seret & lepas file CSV'}</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-4">atau</p>
-                            <button className="bg-sky-700 hover:bg-sky-800 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg">Pilih File</button>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">Mendukung file CSV maks. 10MB</p>
-                        </div>
-                    </div>
-                )}
-                {isLoading && (
-                    <div className="text-center mt-8">
-                        <div className="inline-flex items-center px-6 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full shadow-sm">
-                            <RefreshCw className="w-5 h-5 mr-3 animate-spin text-sky-600 dark:text-sky-400" />
-                            <span className="text-gray-600 dark:text-gray-300">Memproses data...</span>
-                        </div>
-                    </div>
-                )}
-            </div>
-            
-            <motion.div 
-                className="mt-12 max-w-4xl w-full text-center"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-            >
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-8">Fitur Unggulan Kami</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
-                        <div className="p-3 bg-orange-100 dark:bg-orange-900/50 rounded-full mb-4">
-                            <Sparkles className="w-8 h-8 text-orange-500 dark:text-orange-400" />
-                        </div>
-                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Analisis AI Mendalam</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Dapatkan wawasan dan rekomendasi yang mendalam berdasarkan data yang diinput.</p>
-                    </div>
-                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
-                        <div className="p-3 bg-sky-100 dark:bg-sky-900/50 rounded-full mb-4">
-                            <BarChart2 className="w-8 h-8 text-sky-500 dark:text-sky-400" />
-                        </div>
-                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Visualisasi Interaktif</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Visualisasi data kehadiran melalui grafik dan bagan yang dinamis dan mudah dipahami.</p>
-                    </div>
-                    <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
-                        <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-full mb-4">
-                            <BrainCircuit className="w-8 h-8 text-green-500 dark:text-green-400" />
-                        </div>
-                        <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Prediksi Cuti</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Antisipasi kebutuhan cuti karyawan dengan model prediktif berbasis machine learning.</p>
-                    </div>
+        <div className="w-full min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300">
+            <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center">
+                
+                <div className="text-center mb-10">
+                    <h1 className="text-3xl md:text-4xl font-bold text-sky-900 dark:text-white mb-4 flex items-center justify-center gap-3">
+                        <FileText className="w-9 h-9 md:w-10 md:h-10 text-sky-600 dark:text-sky-400" />
+                        <span>Dashboard Analisis</span>
+                    </h1>
+                    <h2 className="text-xl md:text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Absensi Karyawan</h2>
+                    <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">Unggah file CSV Anda untuk mendapatkan wawasan mendalam dan analisis AI tentang pola kehadiran tim Anda.</p>
                 </div>
-            </motion.div>
+                
+                <div className="max-w-2xl w-full mx-auto">
+                    {!scriptsLoaded ? (
+                        <div className="text-center">
+                            <div className="inline-flex items-center px-6 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full shadow-sm">
+                                <RefreshCw className="w-5 h-5 mr-3 animate-spin text-sky-600 dark:text-sky-400" />
+                                <span className="text-gray-600 dark:text-gray-300">Mempersiapkan aplikasi...</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div
+                            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer group ${dragOver ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 scale-105' : 'border-gray-300 dark:border-gray-600 hover:border-sky-600 dark:hover:border-sky-400 hover:bg-white dark:hover:bg-slate-800'}`}
+                            onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+                            onClick={() => document.getElementById('file-input')?.click()}
+                        >
+                            <input type="file" id="file-input" className="hidden" accept=".csv" onChange={handleFileInputChange} disabled={!scriptsLoaded} />
+                            <div className="flex flex-col items-center">
+                                <div className={`p-3 rounded-full mb-4 transition-all duration-300 ${dragOver ? 'bg-sky-100 dark:bg-sky-900 scale-110' : 'bg-gray-100 dark:bg-slate-700 group-hover:bg-sky-100 dark:group-hover:bg-sky-900'}`}>
+                                    <Upload className={`w-10 h-10 transition-colors duration-300 ${dragOver ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-sky-600 dark:group-hover:text-sky-400'}`} />
+                                </div>
+                                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{dragOver ? 'Lepaskan file di sini' : 'Seret & lepas file CSV'}</h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">atau</p>
+                                <button className="bg-sky-700 hover:bg-sky-800 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg">Pilih File</button>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">Mendukung file CSV maks. 10MB</p>
+                            </div>
+                        </div>
+                    )}
+                    {isLoading && (
+                        <div className="text-center mt-8">
+                            <div className="inline-flex items-center px-6 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full shadow-sm">
+                                <RefreshCw className="w-5 h-5 mr-3 animate-spin text-sky-600 dark:text-sky-400" />
+                                <span className="text-gray-600 dark:text-gray-300">Memproses data...</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                <motion.div 
+                    className="mt-12 max-w-4xl w-full text-center"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                >
+                    <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-8">Fitur Unggulan Kami</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                            <div className="p-3 bg-orange-100 dark:bg-orange-900/50 rounded-full mb-4">
+                                <Sparkles className="w-8 h-8 text-orange-500 dark:text-orange-400" />
+                            </div>
+                            <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Analisis AI Mendalam</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Dapatkan wawasan dan rekomendasi yang mendalam berdasarkan data yang diinput.</p>
+                        </div>
+                        <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                            <div className="p-3 bg-sky-100 dark:bg-sky-900/50 rounded-full mb-4">
+                                <BarChart2 className="w-8 h-8 text-sky-500 dark:text-sky-400" />
+                            </div>
+                            <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Visualisasi Interaktif</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Visualisasi data kehadiran melalui grafik dan bagan yang dinamis dan mudah dipahami.</p>
+                        </div>
+                        <div className="flex flex-col items-center p-6 bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                            <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-full mb-4">
+                                <BrainCircuit className="w-8 h-8 text-green-500 dark:text-green-400" />
+                            </div>
+                            <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Prediksi Cuti</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Antisipasi kebutuhan cuti karyawan dengan model prediktif berbasis machine learning.</p>
+                        </div>
+                    </div>
+                </motion.div>
+
+            </div>
         </div>
     );
 };
@@ -828,8 +849,15 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
         }
         const mealAllowance = (employeeData.HARI_KERJA || 0) * 20000;
         const transportAllowance = (employeeData.HARI_KERJA || 0) * 10000;
-        const incentive = 100000 * numberOfMonths;
-        
+        const totalIzinBiasa = (employeeData.IJIN_FULL || 0);
+        let incentive = 0;
+        if (employeeData.HARI_KERJA > 0) {
+            if (totalIzinBiasa === 0) {
+                incentive = 100000;
+            } else if (totalIzinBiasa === 1) {
+                incentive = 50000;
+            }
+        }
         const isMarch = getMonthNumber(selectedMonth) === 3;
         const thr = isMarch ? (employeeData.GAJI_POKOK || 0) : 0;
         const positionAllowance = employeeData.UANG_JABATAN || 0;
@@ -1476,7 +1504,6 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
         const periodAString = `${monthA} ${yearA}`;
         const periodBString = `${monthB} ${yearB}`;
         
-        // Prompt ini sekarang menjadi bagian dari handleAnalyze
         const promptData = {
             periodA: periodAString,
             periodB: periodBString,
@@ -1493,7 +1520,7 @@ const ComparisonPage = ({ data, availableYears, availableMonths, onAnalyze, isAi
                 employees: statsB.employees,
             }
         };
-        onAnalyze(promptData); // Mengirim objek ke fungsi onAnalyze
+        onAnalyze(promptData);
     };
 
     return (
@@ -1834,7 +1861,15 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
         return employeeData.map(emp => {
             const mealAllowance = emp.HARI_KERJA * 20000;
             const transportAllowance = emp.HARI_KERJA * 10000;
-            const incentive = emp.HARI_KERJA > 0 ? 100000 : 0;
+            const totalIzinBiasa = (emp.IJIN_FULL || 0);
+            let incentive = 0;
+            if (emp.HARI_KERJA > 0) {
+                if (totalIzinBiasa === 0) {
+                    incentive = 100000;
+                } else if (totalIzinBiasa === 1) {
+                    incentive = 50000;
+                }   
+            }
             const isMarch = getMonthNumber(selectedMonth) === 3;
             const thr = isMarch ? emp.GAJI_POKOK : 0;
             const positionAllowance = emp.UANG_JABATAN || 0;
@@ -2476,11 +2511,9 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
         const elementsToHide = input.querySelectorAll('.no-print');
         elementsToHide.forEach(el => el.style.display = 'none');
 
-        // Terapkan tema terang sementara untuk hasil cetak yang bersih
         const root = window.document.documentElement;
         const originalTheme = root.className;
-        root.className = 'light'; // Paksa mode terang
-
+        root.className = 'light';
         html2canvas(input, {
             scale: 2, 
             useCORS: true,
@@ -2505,11 +2538,8 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
             const pdf = new jsPDF('p', 'mm', 'a4');
             let position = 0;
 
-            // Tambahkan halaman pertama
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
-
-            // Tambahkan halaman berikutnya jika kontennya panjang
             while (heightLeft >= 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
@@ -2520,7 +2550,6 @@ const DashboardLayout = ({ data, onReset, onAnalyzeIndividual, onAnalyzeOverall,
             pdf.save(fileName);
 
         }).catch(err => {
-            // Pastikan UI kembali normal jika terjadi error
             elementsToHide.forEach(el => el.style.display = '');
             root.className = originalTheme;
             showError("Gagal membuat PDF: " + err.message, "Kesalahan Ekspor");
@@ -2646,7 +2675,6 @@ const App = () => {
                     setAllData(processedData);
                     setShowDashboard(true);
                     setIsLoading(false);
-                    // Navigate to dashboard on successful upload
                     window.location.hash = "/dashboard";
                 },
                 (error) => {
@@ -2663,26 +2691,41 @@ const App = () => {
         window.location.hash = "";
     }, []);
 
-    const handleGetOverallAnalysis = useCallback(async ({ kpis, chartData, selectedMonth, selectedEmployee }) => {
-        setAiModal({ show: true, title: 'Analisis & Rekomendasi Umum', content: '', isLoading: true });
-        const filterInfo = selectedMonth === 'semua' ? 'semua periode' : `bulan ${selectedMonth}`;
-        const employeeInfo = selectedEmployee === 'semua' ? 'seluruh karyawan' : `karyawan bernama ${selectedEmployee}`;
-        const prompt = `Anda adalah seorang analis HR. Berdasarkan data absensi untuk ${filterInfo} yang mencakup ${employeeInfo}, berikan analisis dalam format markdown Bahasa Indonesia:
-      - **Data Ringkas:** Total Karyawan: ${kpis.totalEmployees}, Total Keterlambatan: ${kpis.totalTardiness} kali, Total Absensi: ${kpis.totalAbsence} hari.
-      - **Distribusi Absensi:** Sakit ${chartData.absenceDistribution.sakit} hari, Izin ${chartData.absenceDistribution.izin} hari, Cuti ${chartData.absenceDistribution.cuti} hari.
-      - **Karyawan Paling Sering Terlambat:** ${JSON.stringify(chartData.topTardiness.map(e => ({ nama: e.NAMA, total: e.TERLAMBAT })))}
-      ### **Wawasan Utama per Divisi**
-      (Analisis singkat kekuatan dan kelemahan tiap divisi berdasarkan data di atas)
-      ### **Rekomendasi Aksi Umum**
-      (3 rekomendasi konkret untuk manajemen guna meningkatkan kehadiran secara keseluruhan)`;
-        try {
-            const result = await geminiService.getAnalysis(prompt);
-            setAiModal(prev => ({ ...prev, content: result, isLoading: false }));
-        } catch (error) {
-            setAiModal(prev => ({ ...prev, content: `<p class="text-red-500">${error.message}</p>`, isLoading: false }));
-        }
-    }, []);
-
+        const handleGetOverallAnalysis = useCallback(async ({ kpis, chartData, selectedMonth, selectedEmployee }) => {
+            setAiModal({ show: true, title: 'Analisis & Rekomendasi Umum', content: '', isLoading: true });
+            const filterInfo = selectedMonth === 'semua' ? 'semua periode' : `bulan ${selectedMonth}`;
+            const employeeInfo = selectedEmployee === 'semua' ? 'seluruh karyawan' : `karyawan bernama ${selectedEmployee}`;
+            const topTardinessString = chartData.topTardiness.map(e => `- ${e.NAMA} (${e.TERLAMBAT} kali)`).join('\n');
+            const prompt = `Anda adalah seorang analis HR. Berdasarkan data absensi untuk ${filterInfo} yang mencakup ${employeeInfo}, berikan analisis dalam format markdown Bahasa Indonesia:
+    
+    - **Data Ringkas:**
+      - Total Karyawan: ${kpis.totalEmployees}
+      - Total Keterlambatan: ${kpis.totalTardiness} jam
+      - Total Absensi: ${kpis.totalAbsence} hari
+    
+    - **Distribusi Absensi:**
+      - Sakit: ${chartData.absenceDistribution.sakit} hari
+      - Izin: ${chartData.absenceDistribution.izin} hari
+      - Cuti: ${chartData.absenceDistribution.cuti} hari
+    
+    - **Karyawan Paling Sering Terlambat:**
+    ${topTardinessString}
+    
+    ### **Wawasan Utama**
+    Berikan analisis singkat tentang:
+    1.  **Kinerja Umum:** Bagaimana kinerja kehadiran secara keseluruhan?
+    2.  **Pola Absensi:** Adakah pola yang menonjol dari distribusi absensi (misalnya, tingginya angka sakit)?
+    3.  **Karyawan/Divisi Bermasalah:** Apakah ada karyawan atau divisi tertentu yang menonjol karena sering terlambat?
+    
+    ### **Rekomendasi Aksi**
+    Berikan 3 rekomendasi konkret dan dapat ditindaklanjuti untuk manajemen guna meningkatkan kehadiran dan kedisiplinan secara keseluruhan.`;
+            try {
+                const result = await geminiService.getAnalysis(prompt);
+                setAiModal(prev => ({ ...prev, content: result, isLoading: false }));
+            } catch (error) {
+                setAiModal(prev => ({ ...prev, content: `<p class="text-red-500">${error.message}</p>`, isLoading: false }));
+            }
+        }, []);
     const handleGetIndividualAnalysis = useCallback(async (employee) => {
         setAiModal({ show: true, title: `Analisis Kinerja: ${employee.NAMA}`, content: '', isLoading: true });
         const lamaBekerjaString = employee.LAMA_BEKERJA > 0 ? `${employee.LAMA_BEKERJA} tahun` : (employee.TAHUN_MASUK > 0 ? `${new Date().getFullYear() - employee.TAHUN_MASUK} tahun (Masuk ${employee.TAHUN_MASUK})` : 'N/A');
