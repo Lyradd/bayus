@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext, createContext } from 'react';
 import { Upload, Users, Clock, UserX, Calendar, FileText, RefreshCw, X, UserCheck, Sparkles, LoaderCircle, BarChart2, Briefcase, UserMinus, TrendingUp, Award, AlertTriangle, Search, LayoutDashboard, ChevronsRight, Zap, Download, GitCompareArrows, ArrowUp, ArrowDown, Minus, Printer, ChevronsLeft, ChevronDown, Moon, Sun, BrainCircuit, DollarSign, Target, TrendingDown, ChevronsUpDown } from 'lucide-react';import { motion, AnimatePresence } from 'framer-motion';
+// import { GoogleGenerativeAI } from "@google/genai";
 
 //================================================================
 // ROUTER SETUP (React Router Simulation)
@@ -214,52 +215,28 @@ const geminiService = {
         try {
             const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
             
-            if (!apiKey || apiKey === "AIzaSyBfrVB3nW3AAMnW8ABezf9LILxkITB_cxE") {
-                 console.warn("PERINGATAN: Kunci API masih di-hardcode di dalam cek keamanan!");
-            }
             if (!apiKey) {
                 return `**Terjadi Kesalahan pada Analisis AI:**\n\nAPI Key Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_KEY sudah diatur di file .env.`;
             }
-            
-            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-            const payload = { contents: chatHistory };
-            
-            const baseUrl = import.meta.env.VITE_GEMINI_API_URL;
-            
-            if (!baseUrl) {
-                 return `**Terjadi Kesalahan pada Analisis AI:**\n\nURL API Gemini tidak ditemukan. Pastikan variabel VITE_GEMINI_API_URL sudah diatur di file .env.`;
-            }
 
-            const apiUrl = `${baseUrl}?key=${apiKey}`;
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const modelName = "gemini-1.5-flash-latest";
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
             
-            console.log("Mencoba menghubungi API:", apiUrl);
+            return text;
 
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error("API Error Body:", errorBody);
-                // Memberikan pesan error yang lebih jelas
-                let errorMsg = `Panggilan API gagal dengan status: ${response.status}.`;
-                if (response.status === 429) {
-                    errorMsg += " Anda telah melebihi kuota. Coba lagi dalam satu menit.";
-                } else if (response.status === 400) {
-                    errorMsg += " Permintaan tidak valid, cek model API atau prompt Anda.";
-                }
-                throw new Error(errorMsg);
-            }
-            
-            const result = await response.json();
-            
-            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                return result.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Invalid API response structure:", result);
-                throw new Error("Struktur respons dari API tidak valid.");
-            }
         } catch (error) {
             console.error("Gemini API Error:", error);
-            return `**Terjadi Kesalahan pada Analisis AI:**\n\n${error.message}\n\n*Pastikan API Key sudah benar dan memiliki kuota.*`;
+            let errorMsg = error.message;
+            
+            if (error.message && error.message.includes('429')) {
+                 errorMsg = "Anda telah melebihi kuota API. Coba lagi dalam satu menit.";
+            }
+
+            return `**Terjadi Kesalahan pada Analisis AI:**\n\n${errorMsg}\n\n*Pastikan API Key sudah benar dan memiliki kuota.*`;
         }
     }
 };
