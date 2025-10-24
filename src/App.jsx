@@ -864,8 +864,8 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
 
         const totalAllowances = mealAllowance + transportAllowance + incentive + thr + positionAllowance;
 
-        const lateDeduction = (employeeData.TERLAMBAT || 0) * 5000;
-        const permitDeduction = (employeeData.IJIN_FULL || 0) * 10000;
+        const lateDeduction = (employeeData.TERLAMBAT || 0) * 10000;
+        const permitDeduction = (employeeData.IJIN_FULL || 0) * 70000;
         const cashbonDeduction = employeeData.CASHBON || 0;
         const totalDeductions = lateDeduction + permitDeduction + cashbonDeduction;
 
@@ -940,14 +940,14 @@ const EmployeeSalaryCalculator = ({ employeeData, numberOfMonths, selectedMonth 
                     <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                         <div className="flex items-baseline">
                            <span className="text-sm text-gray-600 dark:text-gray-400">Potongan Terlambat</span>
-                           <span className="text-xs font-normal ml-2 text-gray-500 dark:text-gray-400">({employeeData.TERLAMBAT} x 5,000)</span>
+                           <span className="text-xs font-normal ml-2 text-gray-500 dark:text-gray-400">({employeeData.TERLAMBAT} x 10,000)</span>
                         </div>
                         <span className="text-sm font-medium text-orange-600 dark:text-orange-400">(-) {formatCurrency(salaryDetails.lateDeduction)}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                         <div className="flex items-baseline">
                            <span className="text-sm text-gray-600 dark:text-gray-400">Potongan Izin</span>
-                           <span className="text-xs font-normal ml-2 text-gray-500 dark:text-gray-400">({employeeData.IJIN_FULL} x 10,000)</span>
+                           <span className="text-xs font-normal ml-2 text-gray-500 dark:text-gray-400">({employeeData.IJIN_FULL} x 70,000)</span>
                         </div>
                         <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">(-) {formatCurrency(salaryDetails.permitDeduction)}</span>
                     </div>
@@ -1037,7 +1037,8 @@ const EmployeeDetailView = ({ params, allData, onAnalyze, isAiLoading }) => {
             acc.SURAT_DOKTER += row.SURAT_DOKTER;
             acc.IJIN_FULL += row.IJIN_FULL;
             acc.CUTI += row.CUTI;
-            acc.CASHBON += row.CASHBON || 0;
+            const rowCashbon = Math.min(row.CASHBON || 0, 500000);
+            acc.CASHBON += rowCashbon;
             if (row.UANG_JABATAN) {
                 acc.UANG_JABATAN = row.UANG_JABATAN;
             }
@@ -1851,7 +1852,9 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             stats.HARI_KERJA += row.HARI_KERJA || 0;
             stats.TERLAMBAT += row.TERLAMBAT || 0;
             stats.IJIN_FULL += row.IJIN_FULL || 0;
-            stats.CASHBON += row.CASHBON || 0;
+            //max 500rb
+            const rowCashbon = Math.min(row.CASHBON || 0, 500000);
+            stats.CASHBON += rowCashbon;
             if (row.UANG_JABATAN) {
                 stats.UANG_JABATAN = row.UANG_JABATAN;
             }
@@ -1877,8 +1880,8 @@ const PayrollPage = ({ data, availableYears, availableMonths }) => {
             const totalAllowances = mealAllowance + transportAllowance + incentive + thr + positionAllowance;
             const grossSalary = emp.GAJI_POKOK + totalAllowances;
             
-            const lateDeduction = emp.TERLAMBAT * 5000;
-            const permitDeduction = emp.IJIN_FULL * 10000;
+            const lateDeduction = emp.TERLAMBAT * 10000;
+            const permitDeduction = emp.IJIN_FULL * 70000;
             const cashbonDeduction = emp.CASHBON;
             const totalDeductions = lateDeduction + permitDeduction + cashbonDeduction;
             
