@@ -99,8 +99,10 @@ const Routes = ({ children }) => {
 };
 
 const Route = ({ element, params }) => {
-    return React.cloneElement(element, { params });
+    const dynamicKey = params ? Object.values(params).join('-') : undefined;
+    return React.cloneElement(element, { params, key: dynamicKey || element.key });
 };
+
 
 const useParams = () => {
     const { location } = useContext(RouterContext);
@@ -955,6 +957,11 @@ const EmployeeDetailView = ({ params, allData, onAnalyze, isAiLoading }) => {
     const [selectedMonth, setSelectedMonth] = useState('semua');
     
     const employeeName = params.employeeName;
+
+    useEffect(() => {
+        setSelectedYear('semua');
+        setSelectedMonth('semua');
+    }, [employeeName]);
 
     const employeeAllRecords = useMemo(() => {
         return allData.filter(row => row.NAMA === employeeName);
